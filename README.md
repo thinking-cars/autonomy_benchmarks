@@ -92,8 +92,7 @@ Package and node interfaces are documented in the respective package READMEs lis
 
 | Package | Description |
 | --- | --- |
-| [ros2_demo_package](ros2_demo_package/README.md) | ROS 2 demo package |
-| [ros2_demo_package_interfaces](ros2_demo_package_interfaces/README.md) | ROS interface definitions for ros2_demo_package |
+| [autonomy_benchmarks](autonomy_benchmarks/README.md) | Benchmarking suite for automated driving tasks |
 
 ## ⚖️ Licensing
 
