@@ -23,6 +23,7 @@ class AutonomyBenchmarks(Node):
         self.publisher = None
 
         self.auto_reconfigurable_params: list[str] = []
+        # TODO(unknown): remove sample parameter
         self.param = self.declare_and_load_parameter(
             name="param",
             param_type=rclpy.Parameter.Type.DOUBLE,
@@ -31,6 +32,12 @@ class AutonomyBenchmarks(Node):
             from_value=0.0,
             to_value=10.0,
             step_value=0.1,
+        )
+        self.benchmark = self.declare_and_load_parameter(
+            name="benchmark",
+            param_type=rclpy.Parameter.Type.STRING,
+            description="benchmark name",
+            default="nuscenes_lidar_object_detection",
         )
 
         self.setup()

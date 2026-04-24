@@ -15,6 +15,12 @@ def generate_launch_description():
     remappable_topics = []
 
     args = [
+        DeclareLaunchArgument(
+            "benchmark",
+            default_value="nuscenes_lidar_object_detection",
+            description="benchmark name",
+            choices=["waymo_camera_object_detection_2d", "waymo_camera_object_detection_3d", "nuscenes_lidar_object_detection"],
+        ),
         DeclareLaunchArgument("name", default_value="autonomy_benchmarks", description="node name"),
         DeclareLaunchArgument("namespace", default_value="", description="node namespace"),
         DeclareLaunchArgument(
@@ -35,7 +41,10 @@ def generate_launch_description():
             executable="autonomy_benchmarks",
             namespace=LaunchConfiguration("namespace"),
             name=LaunchConfiguration("name"),
-            parameters=[LaunchConfiguration("params")],
+            parameters=[
+                LaunchConfiguration("params"),
+                {"benchmark": LaunchConfiguration("benchmark")},
+            ],
             arguments=["--ros-args", "--log-level", LaunchConfiguration("log_level")],
             remappings=[(la.default_value[0].text, LaunchConfiguration(la.name)) for la in remappable_topics],
             output="screen",
