@@ -12,10 +12,7 @@ from launch_ros.actions import Node, SetParameter
 def generate_launch_description():
     """Create and return the launch description for the autonomy_benchmarks node."""
 
-    remappable_topics = [
-        DeclareLaunchArgument("input_topic", default_value="~/input"),
-        DeclareLaunchArgument("output_topic", default_value="~/output"),
-    ]
+    remappable_topics = []
 
     args = [
         DeclareLaunchArgument("name", default_value="autonomy_benchmarks", description="node name"),
@@ -28,7 +25,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "log_level", default_value="info", description="ROS logging level (debug, info, warn, error, fatal)"
         ),
-        DeclareLaunchArgument("use_sim_time", default_value="false", description="use simulation clock"),
+        DeclareLaunchArgument("use_sim_time", default_value="true", description="use simulation clock"),
         *remappable_topics,
     ]
 
