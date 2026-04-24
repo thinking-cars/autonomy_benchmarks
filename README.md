@@ -27,7 +27,7 @@ This repository supports the following benchmarks for object detection in automa
 - [Waymo Open Challenges](docs/IMPLEMENTATION.md#waymo-open-challenges): 2D camera object detection, 3D camera-lidar object detection
 - [nuScenes Challenge](docs/IMPLEMENTATION.md#nuscenes-challenge): 3D lidar object detection
 
-New benchmarks can easily be added by subclassing `AutohubBenchmark` as described in [Adding more Benchmarks](docs/IMPLEMENTATION.md#adding-more-benchmarks).
+New benchmarks can easily be added by subclassing `AutonomyBenchmark` as described in [Adding more Benchmarks](docs/IMPLEMENTATION.md#adding-more-benchmarks).
 
 <p align="center">
   <strong>🚀 <a href="#-quick-start">Quick Start</a></strong> • <strong>💻 <a href="#-development">Development</a></strong> • <strong>📝 <a href="#-documentation">Documentation</a></strong>
