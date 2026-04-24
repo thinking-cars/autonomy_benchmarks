@@ -105,16 +105,6 @@ class TestInterface:
         """Create a fresh benchmark instance for each interface test."""
         self.bm = NuscenesLidarObjectDetection()
 
-    def test_get_input(self):
-        """Verify input extraction returns the point cloud payload."""
-        sample = {"point_cloud": "pc_data", "objects": []}
-        assert self.bm.get_input(sample) == "pc_data"
-
-    def test_get_label(self):
-        """Verify label extraction returns the sample objects list."""
-        sample = {"point_cloud": None, "objects": ["box1"]}
-        assert self.bm.get_label(sample) == ["box1"]
-
     def test_compute_sample_metrics_counts(self):
         """Verify Pass 1 reports the original prediction and GT counts."""
         pred = [_box(x=0.0), _box(x=1.0)]

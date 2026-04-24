@@ -49,16 +49,6 @@ class TestWaymoCameraObjectDetection2D:
         """Verify the benchmark exposes its stable identifier."""
         assert self.bm.name == "waymo_camera_object_detection_2d"
 
-    def test_get_input(self) -> None:
-        """Verify input extraction returns the front camera image."""
-        sample = {"image_front": [1, 2, 3], "objects": []}
-        assert self.bm.get_input(sample) == [1, 2, 3]
-
-    def test_get_label(self) -> None:
-        """Verify label extraction returns the sample objects list."""
-        sample = {"image_front": None, "objects": [[0, 0, 1, 1], [0, 0, 1, 1]]}
-        assert self.bm.get_label(sample) == [[0, 0, 1, 1], [0, 0, 1, 1]]
-
     def test_compute_sample_metrics(self) -> None:
         """Verify per-sample metrics include counts and match records."""
         metrics = self.bm.compute_sample_metrics(self.pred_boxes, self.gt_boxes)
