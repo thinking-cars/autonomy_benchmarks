@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from autohub_benchmarks.utils.BoundingBox3D import BoundingBox3D
+from autonomy_benchmarks.utils.BoundingBox3D import BoundingBox3D
 
 # ---------------------------------------------------------------------------
 # Helper

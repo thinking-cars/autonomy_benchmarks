@@ -5,10 +5,10 @@ from __future__ import annotations
 import math
 
 import pytest
-from autohub_benchmarks.benchmarks.lidar_object_detection.NuscenesLidarObjectDetection import (
+from autonomy_benchmarks.benchmarks.lidar_object_detection.NuscenesLidarObjectDetection import (
     NuscenesLidarObjectDetection,
 )
-from autohub_benchmarks.utils.BoundingBox3D import BoundingBox3D
+from autonomy_benchmarks.utils.BoundingBox3D import BoundingBox3D
 
 # ---------------------------------------------------------------------------
 # Helpers

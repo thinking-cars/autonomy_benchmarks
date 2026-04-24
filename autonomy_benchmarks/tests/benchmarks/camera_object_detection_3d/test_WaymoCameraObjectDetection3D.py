@@ -7,10 +7,10 @@ import os
 import tempfile
 
 import pytest
-from autohub_benchmarks.benchmarks.camera_object_detection_3d.WaymoCameraObjectDetection3D import (
+from autonomy_benchmarks.benchmarks.camera_object_detection_3d.WaymoCameraObjectDetection3D import (
     WaymoCameraObjectDetection3D,
 )
-from autohub_benchmarks.utils.BoundingBox3D import BoundingBox3D
+from autonomy_benchmarks.utils.BoundingBox3D import BoundingBox3D
 
 
 def _make_box(**kwargs) -> BoundingBox3D:

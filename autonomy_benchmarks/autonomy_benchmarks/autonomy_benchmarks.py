@@ -1,10 +1,12 @@
 from typing import Any, Optional, Union
 
+import message_filters
 import rclpy
 import rclpy.exceptions
-from geometry_msgs.msg import PointStamped
+import tf2_ros
 from rcl_interfaces.msg import FloatingPointRange, IntegerRange, ParameterDescriptor, SetParametersResult
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 
 
 class AutonomyBenchmarks(Node):
@@ -13,10 +15,6 @@ class AutonomyBenchmarks(Node):
     def __init__(self):
         """Constructor"""
         super().__init__("autonomy_benchmarks")
-
-        self.subscriber = None
-
-        self.publisher = None
 
         self.auto_reconfigurable_params: list[str] = []
         # TODO(unknown): remove sample parameter
@@ -136,23 +134,61 @@ class AutonomyBenchmarks(Node):
         # callback for dynamic parameter configuration
         self.add_on_set_parameters_callback(self.parameters_callback)
 
-        # subscriber for handling incoming messages
-        self.subscriber = self.create_subscription(PointStamped, "~/input", self.topic_callback, qos_profile=10)
-        self.get_logger().info(f"Subscribed to '{self.subscriber.topic_name}'")
+        # TF listener setup
+        self.tf_buffer = tf2_ros.Buffer()
+        self.transform_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
-        # publisher for publishing outgoing messages
-        self.publisher = self.create_publisher(PointStamped, "~/output", qos_profile=10)
-        self.get_logger().info(f"Publishing to '{self.publisher.topic_name}'")
+        self.data_subscriptions: dict[str, Optional[message_filters.Subscriber]] = {}
 
-    def topic_callback(self, msg: PointStamped):
-        """Processes messages received by a subscriber
+        # get handler for specified benchmark
+        benchmark_handler = None
+        if self.benchmark == "waymo_camera_object_detection_2d":
+            from autonomy_benchmarks.benchmarks.camera_object_detection_2d.WaymoCameraObjectDetection2D import (
+                WaymoCameraObjectDetection2D,
+            )
 
-        Args:
-            msg (PointStamped): message
-        """
+            benchmark_handler = WaymoCameraObjectDetection2D()
+        elif self.benchmark == "waymo_camera_object_detection_3d":
+            from autonomy_benchmarks.benchmarks.camera_object_detection_3d.WaymoCameraObjectDetection3D import (
+                WaymoCameraObjectDetection3D,
+            )
 
-        self.get_logger().info(f"Message received with stamp: '{msg.header.stamp}'")
-        self.publisher.publish(msg)
+            benchmark_handler = WaymoCameraObjectDetection3D()
+        elif self.benchmark == "nuscenes_lidar_object_detection":
+            from autonomy_benchmarks.benchmarks.lidar_object_detection.NuscenesLidarObjectDetection import (
+                NuscenesLidarObjectDetection,
+            )
+
+            benchmark_handler = NuscenesLidarObjectDetection()
+        else:
+            self.get_logger().fatal(f"Benchmark '{self.benchmark}' not recognized, exiting")
+            raise SystemExit(1)
+
+        # create subscriptions for benchmark data inputs
+        for msg_topic, msg_type in benchmark_handler.required_inputs().items():
+            self.data_subscriptions[msg_topic] = message_filters.Subscriber(
+                self,
+                msg_type,
+                msg_topic,
+                qos_profile=QoSProfile(
+                    reliability=ReliabilityPolicy.RELIABLE,
+                    durability=DurabilityPolicy.VOLATILE,
+                    history=HistoryPolicy.KEEP_LAST,
+                    depth=10,
+                ),
+            )
+
+        self.message_synchronizer = message_filters.TimeSynchronizer(
+            list(self.data_subscriptions.values()),
+            10,
+        )
+        self.message_synchronizer.registerCallback(self.evaluate_sample)
+
+    def evaluate_sample(self, *args):
+        """Callback to evaluate a single sample when all required input messages have been received"""
+        self.get_logger().info("Received synchronized input messages, evaluating sample...")
+
+        # TODO(unknown): implement sample evaluation logic using benchmark handler
 
 
 def main():

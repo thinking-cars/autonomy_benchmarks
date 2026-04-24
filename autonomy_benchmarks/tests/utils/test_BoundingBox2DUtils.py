@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from autohub_benchmarks.utils.BoundingBox2D import BoundingBox2D
-from autohub_benchmarks.utils.BoundingBox2DUtils import BoundingBox2DUtils
+from autonomy_benchmarks.utils.BoundingBox2D import BoundingBox2D
+from autonomy_benchmarks.utils.BoundingBox2DUtils import BoundingBox2DUtils
 
 
 def _box(x1, y1, x2, y2, image_id=0, class_id=1, confidence_score=None):

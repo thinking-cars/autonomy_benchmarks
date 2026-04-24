@@ -8,7 +8,7 @@ Contains static methods that are dataset- and modality-agnostic:
 
 from __future__ import annotations
 
-from autohub_benchmarks.utils.BoundingBox2D import BoundingBox2D
+from autonomy_benchmarks.utils.BoundingBox2D import BoundingBox2D
 
 
 class BoundingBox2DUtils:

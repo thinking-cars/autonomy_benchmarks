@@ -19,13 +19,14 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-from autohub_benchmarks.benchmarks.AutohubBenchmark import AutohubBenchmark
-from autohub_benchmarks.utils.BoundingBox3D import BoundingBox3D
-from autohub_benchmarks.utils.BoundingBox3DUtils import BoundingBox3DUtils
-from autohub_benchmarks.utils.ObjectDetectionUtils import CumulativeResultsTypeNonUnifiedThreshold, ObjectDetectionUtils
+from autonomy_benchmarks.benchmarks.AutonomyBenchmark import AutonomyBenchmark
+from autonomy_benchmarks.utils.BoundingBox3D import BoundingBox3D
+from autonomy_benchmarks.utils.BoundingBox3DUtils import BoundingBox3DUtils
+from autonomy_benchmarks.utils.ObjectDetectionUtils import CumulativeResultsTypeNonUnifiedThreshold, ObjectDetectionUtils
+from perception_msgs.msg import ObjectList
 
 
-class WaymoCameraObjectDetection3D(AutohubBenchmark):
+class WaymoCameraObjectDetection3D(AutonomyBenchmark):
     """Benchmark for 3D camera object detection on the Waymo Open Dataset.
 
     See the module docstring for full evaluation settings. Class IDs and their
@@ -70,13 +71,13 @@ class WaymoCameraObjectDetection3D(AutohubBenchmark):
     # Interface implementation
     # ------------------------------------------------------------------
 
-    def get_input(self, sample: Dict[str, Any]) -> Any:
-        """Return the camera image from *sample*."""
-        return sample.get("image_front")
+    def required_inputs(self) -> Dict[str, Any]:
+        """Define expected input ROS message types."""
 
-    def get_label(self, sample: Dict[str, Any]) -> Any:
-        """Return 3D bounding-box annotations from *sample*."""
-        return sample.get("objects")
+        return {
+            "/object_list_label": ObjectList,
+            "/object_list_prediction": ObjectList,
+        }
 
     def compute_sample_metrics(
         self, prediction: List[BoundingBox3D], label: List[BoundingBox3D], sample_id: Optional[str] = None

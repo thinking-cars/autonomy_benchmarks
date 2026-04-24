@@ -7,10 +7,10 @@ import os
 import tempfile
 
 import pytest
-from autohub_benchmarks.benchmarks.camera_object_detection_2d.WaymoCameraObjectDetection2D import (
+from autonomy_benchmarks.benchmarks.camera_object_detection_2d.WaymoCameraObjectDetection2D import (
     WaymoCameraObjectDetection2D,
 )
-from autohub_benchmarks.utils.BoundingBox2D import (
+from autonomy_benchmarks.utils.BoundingBox2D import (
     BoundingBox2D,
 )
 

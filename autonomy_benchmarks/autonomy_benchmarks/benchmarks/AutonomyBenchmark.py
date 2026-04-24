@@ -13,7 +13,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
 
-class AutohubBenchmark(ABC):
+class AutonomyBenchmark(ABC):
     """Meta-class (abstract base class) for AutonomyHub benchmarks.
 
     A benchmark is responsible for:
@@ -34,32 +34,12 @@ class AutohubBenchmark(ABC):
     # ------------------------------------------------------------------
 
     @abstractmethod
-    def get_input(self, sample: Dict[str, Any]) -> Any:
-        """Extract the model input tensor / data from a dataset *sample*.
-
-        Parameters
-        ----------
-        sample:
-            A single example from the ``tensorflow_datasets`` dataset,
-            typically a dictionary of tensors.
+    def required_inputs(self) -> Dict[str, Any]:
+        """Define expected input ROS message types.
 
         Returns
         -------
-        The data that should be fed to the model adapter's ``predict`` method.
-        """
-
-    @abstractmethod
-    def get_label(self, sample: Dict[str, Any]) -> Any:
-        """Extract the ground-truth label from a dataset *sample*.
-
-        Parameters
-        ----------
-        sample:
-            A single example from the ``tensorflow_datasets`` dataset.
-
-        Returns
-        -------
-        The ground-truth annotation(s) corresponding to the sample.
+        A dictionary mapping topic names to their expected message types.
         """
 
     @abstractmethod

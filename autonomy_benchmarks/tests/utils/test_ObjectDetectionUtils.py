@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from autohub_benchmarks.utils.ObjectDetectionUtils import ObjectDetectionUtils
+from autonomy_benchmarks.utils.ObjectDetectionUtils import ObjectDetectionUtils
 
 # ---------------------------------------------------------------------------
 # Helpers

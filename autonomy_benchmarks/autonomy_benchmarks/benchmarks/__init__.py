@@ -1,5 +1,5 @@
 """Benchmark implementations for AutonomyHub."""
 
-from autohub_benchmarks.benchmarks.AutohubBenchmark import AutohubBenchmark
+from autonomy_benchmarks.benchmarks.AutonomyBenchmark import AutonomyBenchmark
 
-__all__ = ["AutohubBenchmark"]
+__all__ = ["AutonomyBenchmark"]

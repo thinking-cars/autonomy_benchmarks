@@ -1,6 +1,6 @@
 """3D camera object detection benchmarks."""
 
-from autohub_benchmarks.benchmarks.camera_object_detection_3d.WaymoCameraObjectDetection3D import (
+from autonomy_benchmarks.benchmarks.camera_object_detection_3d.WaymoCameraObjectDetection3D import (
     WaymoCameraObjectDetection3D,
 )
 

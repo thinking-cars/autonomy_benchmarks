@@ -30,17 +30,20 @@ from __future__ import annotations
 import math
 from typing import Any, Dict, List, Optional, Tuple
 
+# import perception_msgs_utils as pmu
+
 import numpy as np
-from autohub_benchmarks.benchmarks.AutohubBenchmark import AutohubBenchmark
-from autohub_benchmarks.utils.BoundingBox3D import BoundingBox3D
-from autohub_benchmarks.utils.BoundingBox3DUtils import BoundingBox3DUtils
-from autohub_benchmarks.utils.ObjectDetectionUtils import ObjectDetectionUtils
+from autonomy_benchmarks.benchmarks.AutonomyBenchmark import AutonomyBenchmark
+from autonomy_benchmarks.utils.BoundingBox3D import BoundingBox3D
+from autonomy_benchmarks.utils.BoundingBox3DUtils import BoundingBox3DUtils
+from autonomy_benchmarks.utils.ObjectDetectionUtils import ObjectDetectionUtils
+from perception_msgs.msg import ObjectList
 from shapely.affinity import rotate as shapely_rotate
 from shapely.geometry import box as shapely_box
 from shapely.geometry import Point
 
 
-class NuscenesLidarObjectDetection(AutohubBenchmark):
+class NuscenesLidarObjectDetection(AutonomyBenchmark):
     """Benchmark for lidar 3D object detection on the nuScenes dataset.
 
     See the module docstring for full evaluation settings. Class IDs evaluated
@@ -110,13 +113,13 @@ class NuscenesLidarObjectDetection(AutohubBenchmark):
     # Interface implementation
     # ------------------------------------------------------------------
 
-    def get_input(self, sample: Dict[str, Any]) -> Any:
-        """Return the lidar point cloud from *sample*."""
-        return sample.get("point_cloud")
+    def required_inputs(self) -> Dict[str, Any]:
+        """Define expected input ROS message types."""
 
-    def get_label(self, sample: Dict[str, Any]) -> Any:
-        """Return 3D bounding-box annotations from *sample*."""
-        return sample.get("objects")
+        return {
+            "/object_list_label": ObjectList,
+            "/object_list_prediction": ObjectList,
+        }
 
     def compute_sample_metrics(
         self,
