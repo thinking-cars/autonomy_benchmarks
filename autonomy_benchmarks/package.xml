@@ -12,8 +12,10 @@
   <license>Apache-2.0</license>
 
   <depend>geometry_msgs</depend>
+  <depend>message_filters</depend>
   <depend>perception_msgs</depend>
   <depend>perception_msgs_utils</depend>
+  <depend>python3-shapely</depend>
   <depend>rclpy</depend>
 
   <test_depend>ament_lint_auto</test_depend>
