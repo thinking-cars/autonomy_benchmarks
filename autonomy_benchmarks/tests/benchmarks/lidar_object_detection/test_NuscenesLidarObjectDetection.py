@@ -5,7 +5,6 @@ from __future__ import annotations
 import math
 
 import pytest
-
 from autohub_benchmarks.benchmarks.lidar_object_detection.NuscenesLidarObjectDetection import (
     NuscenesLidarObjectDetection,
 )
@@ -54,19 +53,25 @@ def _box(
 
 
 class TestInit:
+    """Initialization tests for the nuScenes lidar benchmark."""
+
     def test_name(self):
+        """Verify the benchmark exposes its stable identifier."""
         bm = NuscenesLidarObjectDetection()
         assert bm.name == "nuscenes_lidar_object_detection"
 
     def test_matching_thresholds(self):
+        """Verify the configured BEV matching thresholds."""
         bm = NuscenesLidarObjectDetection()
         assert bm.matching_thresholds == [0.5, 1.0, 2.0, 4.0]
 
     def test_tp_metric_threshold(self):
+        """Verify the TP metric threshold matches the nuScenes spec."""
         bm = NuscenesLidarObjectDetection()
         assert bm.tp_metric_threshold == 2.0
 
     def test_per_class_detection_ranges(self):
+        """Verify each class family receives the expected distance cap."""
         bm = NuscenesLidarObjectDetection()
         for cid in [1, 2, 3, 4, 5]:
             assert bm.per_class_detection_ranges[cid] == (0.0, 50.0)
@@ -76,11 +81,13 @@ class TestInit:
             assert bm.per_class_detection_ranges[cid] == (0.0, 30.0)
 
     def test_aoe_special_class_sets(self):
+        """Verify the orientation-error special-case class sets."""
         bm = NuscenesLidarObjectDetection()
         assert 9 in bm.aoe_ignored_classes
         assert 10 in bm.aoe_pi_classes
 
     def test_ave_ignored_classes(self):
+        """Verify the velocity-error ignored class set."""
         bm = NuscenesLidarObjectDetection()
         assert 9 in bm.ave_ignored_classes
         assert 10 in bm.ave_ignored_classes
@@ -92,18 +99,24 @@ class TestInit:
 
 
 class TestInterface:
+    """Interface tests for sample extraction and Pass 1 outputs."""
+
     def setup_method(self):
+        """Create a fresh benchmark instance for each interface test."""
         self.bm = NuscenesLidarObjectDetection()
 
     def test_get_input(self):
+        """Verify input extraction returns the point cloud payload."""
         sample = {"point_cloud": "pc_data", "objects": []}
         assert self.bm.get_input(sample) == "pc_data"
 
     def test_get_label(self):
+        """Verify label extraction returns the sample objects list."""
         sample = {"point_cloud": None, "objects": ["box1"]}
         assert self.bm.get_label(sample) == ["box1"]
 
     def test_compute_sample_metrics_counts(self):
+        """Verify Pass 1 reports the original prediction and GT counts."""
         pred = [_box(x=0.0), _box(x=1.0)]
         gt = [_box(x=0.0), _box(x=1.0), _box(x=2.0)]
         result = self.bm.compute_sample_metrics(pred, gt)
@@ -111,6 +124,7 @@ class TestInterface:
         assert result["sample_ground_truth_num"] == 3
 
     def test_compute_sample_metrics_empty_inputs(self):
+        """Verify Pass 1 still emits threshold buckets for empty inputs."""
         result = self.bm.compute_sample_metrics([], [])
         assert result["sample_prediction_num"] == 0
         assert result["sample_ground_truth_num"] == 0
@@ -120,6 +134,7 @@ class TestInterface:
             assert result["match_records"][thr] == {}
 
     def test_compute_sample_metrics_returns_match_records_for_all_thresholds(self):
+        """Verify Pass 1 creates match records for every configured threshold."""
         pred = [_box(x=0.0, confidence_score=0.9)]
         gt = [_box(x=0.0)]
         result = self.bm.compute_sample_metrics(pred, gt)
@@ -134,10 +149,14 @@ class TestInterface:
 
 
 class TestGTPointFilter:
+    """Tests for filtering GT boxes with no lidar or radar support."""
+
     def setup_method(self):
+        """Create a fresh benchmark instance for each GT filter test."""
         self.bm = NuscenesLidarObjectDetection()
 
     def test_gt_with_zero_lidar_and_zero_radar_excluded(self):
+        """Verify boxes with zero lidar and radar points are excluded."""
         pred = [_box(x=0.0, confidence_score=0.9)]
         gt_bad = _box(x=0.0, lidar_pts=0, radar_pts=0)
         result = self.bm.compute_sample_metrics(pred, [gt_bad])
@@ -147,6 +166,7 @@ class TestGTPointFilter:
                 assert all(not e["is_tp"] for e in data["pred_entries"])
 
     def test_gt_with_lidar_points_kept(self):
+        """Verify lidar-supported GT boxes remain eligible for matching."""
         pred = [_box(x=0.0, confidence_score=0.9)]
         gt_ok = _box(x=0.0, lidar_pts=5, radar_pts=0)
         result = self.bm.compute_sample_metrics(pred, [gt_ok])
@@ -155,6 +175,7 @@ class TestGTPointFilter:
                 assert data["gt_count"] == 1
 
     def test_gt_with_radar_points_kept(self):
+        """Verify radar-supported GT boxes remain eligible for matching."""
         pred = [_box(x=0.0, confidence_score=0.9)]
         gt_ok = _box(x=0.0, lidar_pts=0, radar_pts=3)
         result = self.bm.compute_sample_metrics(pred, [gt_ok])
@@ -163,6 +184,7 @@ class TestGTPointFilter:
                 assert data["gt_count"] == 1
 
     def test_gt_with_none_points_not_excluded(self):
+        """Verify unknown point counts do not trigger exclusion."""
         pred = [_box(x=0.0, confidence_score=0.9)]
         gt_none = _box(x=0.0, lidar_pts=None, radar_pts=None)
         result = self.bm.compute_sample_metrics(pred, [gt_none])
@@ -177,10 +199,14 @@ class TestGTPointFilter:
 
 
 class TestPerClassRangeFilter:
+    """Tests for per-class distance filtering before matching."""
+
     def setup_method(self):
+        """Create a fresh benchmark instance for each range filter test."""
         self.bm = NuscenesLidarObjectDetection()
 
     def test_cone_beyond_30m_excluded(self):
+        """Verify cones beyond 30 meters are filtered out."""
         pred = [_box(x=31.0, y=0.0, class_id=9, confidence_score=0.9)]
         gt = [_box(x=31.0, y=0.0, class_id=9, lidar_pts=5)]
         result = self.bm.compute_sample_metrics(pred, gt)
@@ -188,6 +214,7 @@ class TestPerClassRangeFilter:
             assert 9 not in class_records
 
     def test_cone_at_30m_included(self):
+        """Verify cones on the 30 meter boundary remain eligible."""
         pred = [_box(x=30.0, y=0.0, class_id=9, confidence_score=0.9)]
         gt = [_box(x=30.0, y=0.0, class_id=9, lidar_pts=5)]
         result = self.bm.compute_sample_metrics(pred, gt)
@@ -195,6 +222,7 @@ class TestPerClassRangeFilter:
             assert 9 in class_records
 
     def test_pedestrian_beyond_40m_excluded(self):
+        """Verify pedestrians beyond 40 meters are filtered out."""
         pred = [_box(x=45.0, y=0.0, class_id=6, confidence_score=0.9)]
         gt = [_box(x=45.0, y=0.0, class_id=6, lidar_pts=5)]
         result = self.bm.compute_sample_metrics(pred, gt)
@@ -202,6 +230,7 @@ class TestPerClassRangeFilter:
             assert 6 not in class_records
 
     def test_car_at_50m_included(self):
+        """Verify cars on the 50 meter boundary remain eligible."""
         pred = [_box(x=50.0, y=0.0, class_id=1, confidence_score=0.9)]
         gt = [_box(x=50.0, y=0.0, class_id=1, lidar_pts=5)]
         result = self.bm.compute_sample_metrics(pred, gt)
@@ -209,6 +238,7 @@ class TestPerClassRangeFilter:
             assert 1 in class_records
 
     def test_car_beyond_50m_excluded(self):
+        """Verify cars beyond 50 meters are filtered out."""
         pred = [_box(x=51.0, y=0.0, class_id=1, confidence_score=0.9)]
         gt = [_box(x=51.0, y=0.0, class_id=1, lidar_pts=5)]
         result = self.bm.compute_sample_metrics(pred, gt)
@@ -222,10 +252,14 @@ class TestPerClassRangeFilter:
 
 
 class TestMatching:
+    """Tests for greedy BEV-distance matching behavior."""
+
     def setup_method(self):
+        """Create a fresh benchmark instance for each matching test."""
         self.bm = NuscenesLidarObjectDetection()
 
     def test_perfect_match_is_tp(self):
+        """Verify identical boxes produce true positives at every threshold."""
         pred = [_box(x=0.0, y=0.0, confidence_score=0.9)]
         gt = [_box(x=0.0, y=0.0, lidar_pts=5)]
         result = self.bm.compute_sample_metrics(pred, gt)
@@ -234,6 +268,7 @@ class TestMatching:
             assert entries[0]["is_tp"] is True
 
     def test_distant_pred_is_fp_at_tight_threshold(self):
+        """Verify a distant prediction is false positive at a tight threshold."""
         pred = [_box(x=10.0, y=0.0, confidence_score=0.9)]
         gt = [_box(x=0.0, y=0.0, lidar_pts=5)]
         result = self.bm.compute_sample_metrics(pred, gt)
@@ -241,6 +276,7 @@ class TestMatching:
         assert entries_05[0]["is_tp"] is False
 
     def test_gt_matched_once(self):
+        """Verify only one prediction can claim a single GT box."""
         pred = [
             _box(x=0.0, y=0.0, confidence_score=0.9),
             _box(x=0.1, y=0.0, confidence_score=0.8),
@@ -252,6 +288,7 @@ class TestMatching:
         assert tp_count == 1
 
     def test_match_selects_closest(self):
+        """Verify matching chooses the nearest GT within the threshold."""
         pred = [_box(x=0.3, y=0.0, confidence_score=0.9)]
         gt_near = _box(x=0.2, y=0.0, class_id=1, lidar_pts=5)
         gt_far = _box(x=0.8, y=0.0, class_id=1, lidar_pts=5)
@@ -260,12 +297,14 @@ class TestMatching:
         assert entries[0]["dist"] == pytest.approx(0.1, abs=1e-6)
 
     def test_gt_count_correct(self):
+        """Verify GT counts are preserved when no predictions exist."""
         gt = [_box(x=float(i), lidar_pts=5) for i in range(3)]
         result = self.bm.compute_sample_metrics([], gt)
         for thr in [0.5, 1.0, 2.0, 4.0]:
             assert result["match_records"][thr][1]["gt_count"] == 3
 
     def test_no_pred_yields_empty_pred_entries(self):
+        """Verify empty prediction lists yield empty entry arrays."""
         gt = [_box(x=0.0, lidar_pts=5)]
         result = self.bm.compute_sample_metrics([], gt)
         for thr in [0.5, 1.0, 2.0, 4.0]:
@@ -273,6 +312,7 @@ class TestMatching:
             assert result["match_records"][thr][1]["gt_count"] == 1
 
     def test_threshold_selectivity(self):
+        """Verify the same pair flips from FP to TP as thresholds widen."""
         pred = [_box(x=0.8, y=0.0, confidence_score=0.9)]
         gt = [_box(x=0.0, y=0.0, lidar_pts=5)]
         result = self.bm.compute_sample_metrics(pred, gt)
@@ -288,10 +328,14 @@ class TestMatching:
 
 
 class TestTPMetrics:
+    """Tests for nuScenes true-positive error metrics."""
+
     def setup_method(self):
+        """Create a fresh benchmark instance for each TP metric test."""
         self.bm = NuscenesLidarObjectDetection()
 
     def test_ate_correct(self):
+        """Verify ATE reports the BEV center distance for matched boxes."""
         # pred at (3, 0), gt at (0, 0) → BEV dist = 3.0, within 4 m threshold.
         pred = [_box(x=3.0, y=0.0, confidence_score=0.9)]
         gt = [_box(x=0.0, y=0.0, lidar_pts=5)]
@@ -301,6 +345,7 @@ class TestTPMetrics:
         assert entry["ate"] == pytest.approx(3.0, abs=1e-6)
 
     def test_ase_perfect_match_is_zero(self):
+        """Verify ASE is zero for identical box dimensions."""
         pred = [_box(width=2.0, height=1.5, length=4.0, confidence_score=0.9)]
         gt = [_box(width=2.0, height=1.5, length=4.0, lidar_pts=5)]
         result = self.bm.compute_sample_metrics(pred, gt)
@@ -318,6 +363,7 @@ class TestTPMetrics:
         assert entry["ase"] == pytest.approx(0.875, abs=1e-6)
 
     def test_aoe_normal_class(self):
+        """Verify AOE uses the wrapped yaw difference for normal classes."""
         pred = [_box(yaw=0.3, confidence_score=0.9, class_id=1)]
         gt = [_box(yaw=0.0, class_id=1, lidar_pts=5)]
         result = self.bm.compute_sample_metrics(pred, gt)
@@ -326,6 +372,7 @@ class TestTPMetrics:
         assert entry["aoe"] == pytest.approx(expected, abs=1e-6)
 
     def test_aoe_traffic_cone_is_zero(self):
+        """Verify traffic cones always receive zero orientation error."""
         pred = [_box(yaw=1.0, class_id=9, confidence_score=0.9)]
         gt = [_box(yaw=0.0, class_id=9, lidar_pts=5)]
         result = self.bm.compute_sample_metrics(pred, gt)
@@ -334,8 +381,10 @@ class TestTPMetrics:
         assert entry["aoe"] == pytest.approx(0.0, abs=1e-6)
 
     def test_aoe_barrier_capped_at_pi(self):
-        """AOE for barrier (class 10) uses π-symmetry: wrap into [0,π) then min with complement.
-        With heading_diff = π+0.5: mod=0.5, aoe = min(0.5, π-0.5) = 0.5, not π+0.5."""
+        """Verify barrier AOE respects pi-symmetry.
+
+        With heading_diff = π+0.5: mod=0.5, aoe = min(0.5, π-0.5) = 0.5, not π+0.5.
+        """
         heading_diff_raw = math.pi + 0.5
         pred = [_box(yaw=heading_diff_raw, class_id=10, confidence_score=0.9)]
         gt = [_box(yaw=0.0, class_id=10, lidar_pts=5)]
@@ -348,6 +397,7 @@ class TestTPMetrics:
         assert entry["aoe"] <= math.pi / 2 + 1e-6  # barrier AOE is always ≤ π/2
 
     def test_ave_normal_class(self):
+        """Verify AVE measures Euclidean velocity error for normal classes."""
         pred = [_box(vx=3.0, vy=4.0, confidence_score=0.9, class_id=1)]
         gt = [_box(vx=0.0, vy=0.0, class_id=1, lidar_pts=5)]
         result = self.bm.compute_sample_metrics(pred, gt)
@@ -355,6 +405,7 @@ class TestTPMetrics:
         assert entry["ave"] == pytest.approx(5.0, abs=1e-6)
 
     def test_ave_traffic_cone_is_zero(self):
+        """Verify traffic cones always receive zero velocity error."""
         pred = [_box(vx=10.0, vy=10.0, class_id=9, confidence_score=0.9)]
         gt = [_box(vx=0.0, vy=0.0, class_id=9, lidar_pts=5)]
         result = self.bm.compute_sample_metrics(pred, gt)
@@ -363,6 +414,7 @@ class TestTPMetrics:
         assert entry["ave"] == pytest.approx(0.0, abs=1e-6)
 
     def test_ave_barrier_is_zero(self):
+        """Verify barriers always receive zero velocity error."""
         pred = [_box(vx=10.0, vy=10.0, class_id=10, confidence_score=0.9)]
         gt = [_box(vx=0.0, vy=0.0, class_id=10, lidar_pts=5)]
         result = self.bm.compute_sample_metrics(pred, gt)
@@ -371,6 +423,7 @@ class TestTPMetrics:
         assert entry["ave"] == pytest.approx(0.0, abs=1e-6)
 
     def test_fp_has_zero_tp_metrics(self):
+        """Verify false positives report zeroed TP metrics and null AAE."""
         # pred at x=10 (within 50 m range), gt at x=0 → dist=10 > all thresholds → FP.
         pred = [_box(x=10.0, confidence_score=0.9)]
         gt = [_box(x=0.0, lidar_pts=5)]
@@ -432,16 +485,21 @@ class TestTPMetrics:
 
 
 class TestMergeMatchRecords:
+    """Tests for merging per-frame match record dictionaries."""
+
     def setup_method(self):
+        """Create a fresh benchmark instance for merge tests."""
         self.bm = NuscenesLidarObjectDetection()
 
     def test_merge_gt_count_sums(self):
+        """Verify GT counts are summed across frames when merging."""
         frame1 = {0.5: {1: {"pred_entries": [], "gt_count": 3}}}
         frame2 = {0.5: {1: {"pred_entries": [], "gt_count": 2}}}
         merged = self.bm._merge_match_records([frame1, frame2])
         assert merged[0.5][1]["gt_count"] == 5
 
     def test_merge_pred_entries_concatenated(self):
+        """Verify prediction entries are concatenated across frames."""
         e1 = {
             "confidence_score": 0.9,
             "is_tp": True,
@@ -474,14 +532,20 @@ class TestMergeMatchRecords:
 
 
 class TestAPFilter:
+    """Tests for the nuScenes minimum precision and recall AP filter."""
+
     def setup_method(self):
+        """Create a fresh benchmark instance for AP filter tests."""
         self.bm = NuscenesLidarObjectDetection()
 
     def test_ap_filter_boundary_exclusive(self):
-        """P-R points exactly at 0.1 must be excluded (> not >=) per the
+        """Verify P-R points on the minimum boundary are excluded.
+
+        P-R points exactly at 0.1 must be excluded (> not >=) per the
         official nuScenes spec which states recalls and precisions > 0.1.
         A single remaining point above the boundary produces AP == 0 via
-        trapezoidal integration (needs at least two points for non-zero area)."""
+        trapezoidal integration (needs at least two points for non-zero area).
+        """
         cumulative_results = {
             0.5: {
                 1: {
@@ -512,6 +576,7 @@ class TestAPFilter:
         assert ap == 0.0
 
     def test_below_min_precision_excluded(self):
+        """Verify AP drops to zero when precision stays below the minimum."""
         cumulative_results = {
             0.5: {
                 1: {
@@ -532,6 +597,7 @@ class TestAPFilter:
         assert ap == 0.0
 
     def test_below_min_recall_excluded(self):
+        """Verify AP drops to zero when recall stays below the minimum."""
         cumulative_results = {
             0.5: {
                 1: {
@@ -558,7 +624,10 @@ class TestAPFilter:
 
 
 class TestAggregatedMetrics:
+    """Tests for dataset-level aggregation over match records."""
+
     def setup_method(self):
+        """Create a fresh benchmark instance for aggregation tests."""
         self.bm = NuscenesLidarObjectDetection()
 
     def _make_sample_result(self, pred_boxes, gt_boxes):
@@ -566,6 +635,7 @@ class TestAggregatedMetrics:
         return {"metrics": metrics}
 
     def test_perfect_single_class_map_is_one(self):
+        """Verify perfect matching yields a high non-zero dataset mAP."""
         # All preds perfectly match their gt (dist=0). Boxes beyond 50 m are
         # range-filtered for class 1, so use x in [0, 10]. Trapezoidal AP
         # equals (n-1)/n for n matched pairs; with n=10, AP ≈ 0.9.
@@ -577,22 +647,26 @@ class TestAggregatedMetrics:
         assert result["benchmark_score"]["map"] >= 0.8
 
     def test_no_pred_map_is_zero(self):
+        """Verify missing predictions yield zero mAP."""
         gts = [_box(x=0.0, lidar_pts=5)]
         result = self.bm.compute_aggregated_metrics([self._make_sample_result([], gts)])
         assert result["benchmark_score"]["map"] == 0.0
 
     def test_all_fp_map_is_zero(self):
+        """Verify all-false-positive predictions yield zero mAP."""
         preds = [_box(x=float(i), confidence_score=0.9) for i in range(5)]
         result = self.bm.compute_aggregated_metrics([self._make_sample_result(preds, [])])
         assert result["benchmark_score"]["map"] == 0.0
 
     def test_multi_frame_gt_count_accumulates(self):
+        """Verify GT counts accumulate correctly across multiple frames."""
         r1 = self._make_sample_result([_box(x=0.0, confidence_score=0.9)], [_box(x=0.0, lidar_pts=5)])
         r2 = self._make_sample_result([_box(x=0.0, confidence_score=0.8)], [_box(x=0.0, lidar_pts=5)])
         merged = self.bm._merge_match_records([r1["metrics"]["match_records"], r2["metrics"]["match_records"]])
         assert merged[0.5][1]["gt_count"] == 2
 
     def test_benchmark_score_keys(self):
+        """Verify benchmark scores expose mAP, TP metrics, and NDS keys."""
         preds = [_box(x=0.0, confidence_score=0.9)]
         gts = [_box(x=0.0, lidar_pts=5)]
         result = self.bm.compute_aggregated_metrics([self._make_sample_result(preds, gts)])
@@ -605,6 +679,7 @@ class TestAggregatedMetrics:
         assert isinstance(score["maae_2.0"], float)
 
     def test_tp_metrics_keys_include_aae(self):
+        """Verify per-class TP metrics always include an AAE entry."""
         preds = [_box(x=0.0, confidence_score=0.9)]
         gts = [_box(x=0.0, lidar_pts=5)]
         result = self.bm.compute_aggregated_metrics([self._make_sample_result(preds, gts)])
@@ -615,6 +690,7 @@ class TestAggregatedMetrics:
             assert tm["aae"] is None
 
     def test_threshold_metrics_structure(self):
+        """Verify threshold metrics expose the expected top-level structure."""
         preds = [_box(x=0.0, confidence_score=0.9)]
         gts = [_box(x=0.0, lidar_pts=5)]
         result = self.bm.compute_aggregated_metrics([self._make_sample_result(preds, gts)])
@@ -631,7 +707,10 @@ class TestAggregatedMetrics:
 
 
 class TestNDS:
+    """Tests for the nuScenes detection score calculation."""
+
     def setup_method(self):
+        """Create a fresh benchmark instance for NDS tests."""
         self.bm = NuscenesLidarObjectDetection()
 
     # Helper: minimal threshold_metrics structure with the required "thresholds" key.
@@ -664,6 +743,7 @@ class TestNDS:
         assert score_without["nds"] == pytest.approx(0.9, abs=1e-4)
 
     def test_nds_clamps_tp_errors_above_one(self):
+        """Verify TP errors above one are clamped when computing NDS."""
         tp_metrics = {1: {"ate": 2.0, "ase": 3.0, "aoe": 5.0, "ave": 1.5, "aae": 2.0}}
         score = self.bm._compute_benchmark_score(self._tm(0.0), tp_metrics)
         assert score["nds"] >= 0.0
@@ -684,6 +764,7 @@ class TestBikeRackFilter:
 
     @pytest.fixture(autouse=True)
     def setup(self):
+        """Create a fresh benchmark instance for bike-rack filter tests."""
         self.bm = NuscenesLidarObjectDetection()
 
     def _rack(self, x=0, y=0, width=4.0, length=4.0, yaw=0.0):
@@ -716,12 +797,14 @@ class TestBikeRackFilter:
     # -- class selectivity ----------------------------------------------------
 
     def test_filter_removes_bicycle_class_inside_rack(self):
+        """Verify bicycles inside a rack polygon are filtered out."""
         rack = self._rack(x=0, y=0, width=4.0, length=4.0)
         bike = _box(x=0, y=0, class_id=8, lidar_pts=5)
         pred, gt = self.bm._prepare_pred_gt_boxes([], [rack, bike])
         assert gt == []
 
     def test_filter_removes_motorcycle_class_inside_rack(self):
+        """Verify motorcycles inside a rack polygon are filtered out."""
         rack = self._rack(x=0, y=0, width=4.0, length=4.0)
         moto = _box(x=0.5, y=0.5, class_id=7, lidar_pts=5)
         pred, gt = self.bm._prepare_pred_gt_boxes([], [rack, moto])

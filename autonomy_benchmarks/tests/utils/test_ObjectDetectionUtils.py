@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from autohub_benchmarks.utils.ObjectDetectionUtils import ObjectDetectionUtils
 
 # ---------------------------------------------------------------------------
@@ -55,16 +54,21 @@ def _build_interval_inputs():
 
 
 class TestObjectDetectionUtils:
+    """Tests for AP helpers and aggregation utilities."""
+
     def test_compute_ap_trapezoidal(self) -> None:
+        """Verify trapezoidal AP matches NumPy integration."""
         pr_pairs = [(0.0, 1.0), (0.5, 0.8), (1.0, 0.6)]
         expected = float(np.trapz(np.array([1.0, 0.8, 0.6]), np.array([0.0, 0.5, 1.0])))
         assert ObjectDetectionUtils.compute_ap_trapezoidal(pr_pairs) == pytest.approx(expected)
 
     def test_compute_ap_11_point(self) -> None:
+        """Verify 11-point AP is one for perfect precision at every recall."""
         pr_pairs = [(r / 10, 1.0) for r in range(11)]
         assert ObjectDetectionUtils.compute_ap_11_point(pr_pairs) == pytest.approx(1.0)
 
     def test_compute_ap_thresholds_unified(self) -> None:
+        """Verify AP threshold aggregation works for unified thresholds."""
         cumulative = _make_cumulative_unified(0.5, n_tp=2, n_fp=1)
         result = ObjectDetectionUtils.compute_ap_thresholds(cumulative, ObjectDetectionUtils.compute_ap_trapezoidal)
         assert 0.5 in result["thresholds"]
@@ -73,6 +77,7 @@ class TestObjectDetectionUtils:
         assert 0.0 <= result["overall_map"] <= 1.0
 
     def test_compute_ap_thresholds_nonunified(self) -> None:
+        """Verify AP threshold aggregation works for keyed threshold sets."""
         key = "Vehicle_0.7_Pedestrian_0.5_Cyclist_0.5"
         cumulative = _make_cumulative_nonunified(key)
         result = ObjectDetectionUtils.compute_ap_thresholds(cumulative, ObjectDetectionUtils.compute_ap_trapezoidal)
@@ -82,6 +87,7 @@ class TestObjectDetectionUtils:
         assert 0.0 <= result["overall_map"] <= 1.0
 
     def test_compute_ap_intervals_unified(self) -> None:
+        """Verify AP interval aggregation produces interval and overall scores."""
         interval_keys, interval_map, cumulative = _build_interval_inputs()
         result = ObjectDetectionUtils.compute_ap_intervals(
             interval_keys,

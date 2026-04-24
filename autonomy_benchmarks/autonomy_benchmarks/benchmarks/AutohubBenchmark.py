@@ -24,6 +24,7 @@ class AutohubBenchmark(ABC):
     """
 
     def __init__(self, name: str, description: str = "") -> None:
+        """Initialize a benchmark definition and empty result store."""
         self.name: str = name
         self.description: str = description
         self._sample_results: List[Dict[str, Any]] = []

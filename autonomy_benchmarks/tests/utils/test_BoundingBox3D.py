@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from autohub_benchmarks.utils.BoundingBox3D import BoundingBox3D
 
 # ---------------------------------------------------------------------------
@@ -45,18 +44,23 @@ def _box(
 
 
 class TestBoundingBox3D:
+    """Tests for BoundingBox3D convenience helpers."""
+
     # ------------------------------------------------------------------
     # to_list
     # ------------------------------------------------------------------
 
     def test_to_list_length(self) -> None:
+        """Verify the serialized box list always has nine elements."""
         assert len(_box().to_list()) == 9
 
     def test_to_list_values(self) -> None:
+        """Verify to_list preserves the numeric field values."""
         box = _box(x=1.0, y=2.0, z=3.0, width=4.0, height=5.0, length=6.0, yaw=0.5, vx=1.5, vy=-0.5)
         assert box.to_list() == pytest.approx([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 0.5, 1.5, -0.5])
 
     def test_to_list_order(self) -> None:
+        """Verify to_list returns values in the documented field order."""
         x, y, z, w, h, length, yaw, vx, vy = _box(
             x=1.0, y=2.0, z=3.0, width=4.0, height=5.0, length=6.0, yaw=0.7, vx=0.0, vy=0.0
         ).to_list()

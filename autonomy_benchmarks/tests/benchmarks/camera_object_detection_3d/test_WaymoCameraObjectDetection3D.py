@@ -7,7 +7,6 @@ import os
 import tempfile
 
 import pytest
-
 from autohub_benchmarks.benchmarks.camera_object_detection_3d.WaymoCameraObjectDetection3D import (
     WaymoCameraObjectDetection3D,
 )
@@ -32,7 +31,10 @@ def _make_box(**kwargs) -> BoundingBox3D:
 
 
 class TestWaymoCameraObjectDetection3D:
+    """Behavioral tests for the Waymo 3D benchmark."""
+
     def setup_method(self) -> None:
+        """Create a benchmark instance with one matching 3D box pair."""
         self.bm = WaymoCameraObjectDetection3D()
         self.pred_boxes = [
             BoundingBox3D(
@@ -68,13 +70,16 @@ class TestWaymoCameraObjectDetection3D:
         ]
 
     def test_name(self) -> None:
+        """Verify the benchmark exposes its stable identifier."""
         assert self.bm.name == "waymo_camera_object_detection_3d"
 
     def test_get_input(self) -> None:
+        """Verify input extraction returns the front camera image."""
         sample = {"image_front": [4, 5, 6], "objects": []}
         assert self.bm.get_input(sample) == [4, 5, 6]
 
     def test_get_label(self) -> None:
+        """Verify label extraction returns the sample objects list."""
         sample = {
             "image_front": None,
             "objects": [[0, 0, 0, 1, 1, 1], [0, 0, 0, 1, 1, 1]],
@@ -87,12 +92,14 @@ class TestWaymoCameraObjectDetection3D:
         return [{"metrics": metrics}]
 
     def test_compute_sample_metrics(self) -> None:
+        """Verify per-sample metrics include counts and match records."""
         metrics = self.bm.compute_sample_metrics(self.pred_boxes, self.gt_boxes)
         assert metrics["sample_prediction_num"] == 1
         assert metrics["sample_ground_truth_num"] == 1
         assert "match_records" in metrics
 
     def test_compute_aggregated_metrics(self) -> None:
+        """Verify aggregated metrics expose AP, APH, and benchmark scores."""
         sample_results = self._make_sample_results(self.pred_boxes, self.gt_boxes)
         agg = self.bm.compute_aggregated_metrics(sample_results)
         assert "aggregated_metrics" in agg
@@ -101,6 +108,7 @@ class TestWaymoCameraObjectDetection3D:
         assert "threshold_metrics_with_heading" in agg["aggregated_metrics"]
 
     def test_save_results(self) -> None:
+        """Verify final results are serialized with sample and aggregate data."""
         self.bm.record_sample(self.pred_boxes, self.gt_boxes, "s0")
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "results.json")
@@ -190,6 +198,7 @@ class TestPreparePredGtBoxesWithPts:
     """Ensure prepare_pred_gt_boxes respects number_of_lidar_points-based difficulty."""
 
     def setup_method(self) -> None:
+        """Create a benchmark instance and reusable prediction box."""
         self.bm = WaymoCameraObjectDetection3D()
         self.pred = _make_box(x=0.0, y=0.0, z=0.0, confidence_score=0.9)
 

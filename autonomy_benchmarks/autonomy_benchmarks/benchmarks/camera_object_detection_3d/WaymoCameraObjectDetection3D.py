@@ -19,7 +19,6 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-
 from autohub_benchmarks.benchmarks.AutohubBenchmark import AutohubBenchmark
 from autohub_benchmarks.utils.BoundingBox3D import BoundingBox3D
 from autohub_benchmarks.utils.BoundingBox3DUtils import BoundingBox3DUtils
@@ -43,6 +42,7 @@ class WaymoCameraObjectDetection3D(AutohubBenchmark):
     """
 
     def __init__(self) -> None:
+        """Configure Waymo 3D thresholds, ranges, and weighted metrics."""
         super().__init__(
             name="waymo_camera_object_detection_3d",
             description=("3D bounding-box object detection benchmark using the Waymo Open Dataset."),

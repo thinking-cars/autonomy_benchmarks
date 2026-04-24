@@ -22,10 +22,9 @@ from __future__ import annotations
 from typing import Callable, Dict, List, Tuple
 
 import numpy as np
+from autohub_benchmarks.utils.BoundingBox3D import BoundingBox3D
 from shapely.affinity import rotate, translate
 from shapely.geometry import box as shapely_box
-
-from autohub_benchmarks.utils.BoundingBox3D import BoundingBox3D
 
 
 class BoundingBox3DUtils:

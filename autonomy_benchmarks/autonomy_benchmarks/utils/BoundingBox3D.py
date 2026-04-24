@@ -8,9 +8,11 @@ from typing import List, Optional
 
 @dataclass
 class BoundingBox3D:
-    """Represents a 3D bounding box with center (x, y, z),
-    dimensions (width, height, length), orientation (yaw),
-    velocity (vx, vy), class ID, attribute, and optional confidence score.
+    """Represents a 3D bounding box.
+
+    Stores the center `(x, y, z)`, dimensions `(width, height, length)`,
+    orientation `(yaw)`, velocity `(vx, vy)`, class ID, attribute, and an
+    optional confidence score.
     """
 
     x: float  # center point x in meter

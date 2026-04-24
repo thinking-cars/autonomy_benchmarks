@@ -7,7 +7,6 @@ import os
 import tempfile
 
 import pytest
-
 from autohub_benchmarks.benchmarks.camera_object_detection_2d.WaymoCameraObjectDetection2D import (
     WaymoCameraObjectDetection2D,
 )
@@ -17,7 +16,10 @@ from autohub_benchmarks.utils.BoundingBox2D import (
 
 
 class TestWaymoCameraObjectDetection2D:
+    """Behavioral tests for the Waymo 2D benchmark."""
+
     def setup_method(self) -> None:
+        """Create a benchmark instance with one matching prediction pair."""
         self.bm = WaymoCameraObjectDetection2D()
         self.pred_boxes = [
             BoundingBox2D(
@@ -44,23 +46,28 @@ class TestWaymoCameraObjectDetection2D:
         ]
 
     def test_name(self) -> None:
+        """Verify the benchmark exposes its stable identifier."""
         assert self.bm.name == "waymo_camera_object_detection_2d"
 
     def test_get_input(self) -> None:
+        """Verify input extraction returns the front camera image."""
         sample = {"image_front": [1, 2, 3], "objects": []}
         assert self.bm.get_input(sample) == [1, 2, 3]
 
     def test_get_label(self) -> None:
+        """Verify label extraction returns the sample objects list."""
         sample = {"image_front": None, "objects": [[0, 0, 1, 1], [0, 0, 1, 1]]}
         assert self.bm.get_label(sample) == [[0, 0, 1, 1], [0, 0, 1, 1]]
 
     def test_compute_sample_metrics(self) -> None:
+        """Verify per-sample metrics include counts and match records."""
         metrics = self.bm.compute_sample_metrics(self.pred_boxes, self.gt_boxes)
         assert metrics["sample_prediction_num"] == 1
         assert metrics["sample_ground_truth_num"] == 1
         assert "match_records" in metrics
 
     def test_compute_aggregated_metrics(self) -> None:
+        """Verify aggregated metrics include threshold and benchmark scores."""
         sample_results = [{"metrics": self.bm.compute_sample_metrics(self.pred_boxes, self.gt_boxes)}]
         agg = self.bm.compute_aggregated_metrics(sample_results)
         assert "aggregated_metrics" in agg
@@ -68,6 +75,7 @@ class TestWaymoCameraObjectDetection2D:
         assert "threshold_metrics" in agg["aggregated_metrics"]
 
     def test_save_results(self) -> None:
+        """Verify final results are serialized with sample and aggregate data."""
         self.bm.record_sample(self.pred_boxes, self.gt_boxes, "s0")
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "results.json")

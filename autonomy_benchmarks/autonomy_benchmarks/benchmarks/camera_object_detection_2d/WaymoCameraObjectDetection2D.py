@@ -17,7 +17,6 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-
 from autohub_benchmarks.benchmarks.AutohubBenchmark import AutohubBenchmark
 from autohub_benchmarks.utils.BoundingBox2D import (
     BoundingBox2D,
@@ -46,6 +45,7 @@ class WaymoCameraObjectDetection2D(AutohubBenchmark):
     """
 
     def __init__(self) -> None:
+        """Configure Waymo 2D thresholds, ranges, and score aggregation."""
         super().__init__(
             name="waymo_camera_object_detection_2d",
             description=("2D camera object detection benchmark using the Waymo Open Dataset."),

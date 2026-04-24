@@ -31,14 +31,13 @@ import math
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-from shapely.affinity import rotate as shapely_rotate
-from shapely.geometry import Point
-from shapely.geometry import box as shapely_box
-
 from autohub_benchmarks.benchmarks.AutohubBenchmark import AutohubBenchmark
 from autohub_benchmarks.utils.BoundingBox3D import BoundingBox3D
 from autohub_benchmarks.utils.BoundingBox3DUtils import BoundingBox3DUtils
 from autohub_benchmarks.utils.ObjectDetectionUtils import ObjectDetectionUtils
+from shapely.affinity import rotate as shapely_rotate
+from shapely.geometry import box as shapely_box
+from shapely.geometry import Point
 
 
 class NuscenesLidarObjectDetection(AutohubBenchmark):
@@ -64,6 +63,7 @@ class NuscenesLidarObjectDetection(AutohubBenchmark):
     """
 
     def __init__(self) -> None:
+        """Configure nuScenes thresholds, class ranges, and TP metric rules."""
         super().__init__(
             name="nuscenes_lidar_object_detection",
             description=("3D bounding-box object detection benchmark from lidar point clouds using the nuScenes dataset."),
