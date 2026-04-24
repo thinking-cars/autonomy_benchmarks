@@ -117,8 +117,8 @@ class NuscenesLidarObjectDetection(AutonomyBenchmark):
         """Define expected input ROS message types."""
 
         return {
-            "/object_list_label": ObjectList,
-            "/object_list_prediction": ObjectList,
+            "object_list/lidar_01": ObjectList,
+            "object_list/prediction": ObjectList,
         }
 
     def compute_sample_metrics(
