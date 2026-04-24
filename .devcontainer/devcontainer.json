@@ -45,7 +45,7 @@
 
     // attach to external Zenoh router if devcontainer should connect to other containers
     "RMW_IMPLEMENTATION": "rmw_zenoh_cpp",
-    "ZENOH_CONFIG_OVERRIDE": "connect/endpoints=[\"tcp/172.17.0.3:7447\"]",  // adapt to the IP address of the Zenoh router container
+    "ZENOH_CONFIG_OVERRIDE": "connect/endpoints=[\"tcp/172.17.0.2:7447\"]",  // adapt to the IP address of the Zenoh router container
   },
 
   // https://containers.dev/features
