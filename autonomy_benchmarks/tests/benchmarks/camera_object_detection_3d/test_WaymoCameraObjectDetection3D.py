@@ -155,18 +155,10 @@ class TestWaymoCameraObjectDetection3D:
 
     def test_heading_weighted_tp_matched(self) -> None:
         """Two identical preds vs two GTs with yaw=0 → tp_weight_aph=1.0 for both → APH > 0."""
-        pred1 = _make_box(
-            x=0.0, y=0.0, z=0.0, width=2.0, height=2.0, length=4.0, yaw=0.0, confidence_score=0.9, image_id=0
-        )
-        pred2 = _make_box(
-            x=0.0, y=0.0, z=0.0, width=2.0, height=2.0, length=4.0, yaw=0.0, confidence_score=0.8, image_id=1
-        )
-        gt1 = _make_box(
-            x=0.0, y=0.0, z=0.0, width=2.0, height=2.0, length=4.0, yaw=0.0, number_of_lidar_points=10, image_id=0
-        )
-        gt2 = _make_box(
-            x=0.0, y=0.0, z=0.0, width=2.0, height=2.0, length=4.0, yaw=0.0, number_of_lidar_points=10, image_id=1
-        )
+        pred1 = _make_box(x=0.0, y=0.0, z=0.0, width=2.0, height=2.0, length=4.0, yaw=0.0, confidence_score=0.9, image_id=0)
+        pred2 = _make_box(x=0.0, y=0.0, z=0.0, width=2.0, height=2.0, length=4.0, yaw=0.0, confidence_score=0.8, image_id=1)
+        gt1 = _make_box(x=0.0, y=0.0, z=0.0, width=2.0, height=2.0, length=4.0, yaw=0.0, number_of_lidar_points=10, image_id=0)
+        gt2 = _make_box(x=0.0, y=0.0, z=0.0, width=2.0, height=2.0, length=4.0, yaw=0.0, number_of_lidar_points=10, image_id=1)
         sample_results = self._make_sample_results([pred1, pred2], [gt1, gt2])
         agg = self.bm.compute_aggregated_metrics(sample_results)
         wh = agg["aggregated_metrics"]["threshold_metrics_with_heading"]

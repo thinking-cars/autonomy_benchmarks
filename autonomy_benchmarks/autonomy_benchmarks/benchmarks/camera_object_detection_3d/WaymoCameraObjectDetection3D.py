@@ -184,9 +184,7 @@ class WaymoCameraObjectDetection3D(AutohubBenchmark):
     # Helper functions for metric computation
     # ------------------------------------------------------------------
 
-    def _prepare_pred_gt_boxes(
-        self, pred_boxes: List[BoundingBox3D], gt_boxes: List[BoundingBox3D]
-    ) -> Tuple[
+    def _prepare_pred_gt_boxes(self, pred_boxes: List[BoundingBox3D], gt_boxes: List[BoundingBox3D]) -> Tuple[
         Dict[str, Dict[str, List[BoundingBox3D]]],
         Dict[str, Dict[str, List[BoundingBox3D]]],
     ]:

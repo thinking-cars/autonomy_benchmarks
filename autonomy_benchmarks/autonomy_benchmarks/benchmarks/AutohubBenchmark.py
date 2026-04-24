@@ -99,9 +99,7 @@ class AutohubBenchmark(ABC):
     # Concrete helpers
     # ------------------------------------------------------------------
 
-    def record_sample(
-        self, prediction: Any, label: Any, sample_id: Optional[str] = None, **auxiliary: Any
-    ) -> Dict[str, Any]:
+    def record_sample(self, prediction: Any, label: Any, sample_id: Optional[str] = None, **auxiliary: Any) -> Dict[str, Any]:
         """Compute and store per-sample metrics.
 
         This is the main entry point used by the evaluation loop.  Any

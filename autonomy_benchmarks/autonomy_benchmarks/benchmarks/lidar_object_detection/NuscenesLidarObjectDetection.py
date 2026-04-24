@@ -66,9 +66,7 @@ class NuscenesLidarObjectDetection(AutohubBenchmark):
     def __init__(self) -> None:
         super().__init__(
             name="nuscenes_lidar_object_detection",
-            description=(
-                "3D bounding-box object detection benchmark from lidar point clouds using the nuScenes dataset."
-            ),
+            description=("3D bounding-box object detection benchmark from lidar point clouds using the nuScenes dataset."),
         )
 
         # BEV distance thresholds used for AP and TP-metric computation.
@@ -643,11 +641,7 @@ class NuscenesLidarObjectDetection(AutohubBenchmark):
 
         # NDS combines mAP and TP metrics with weights 5-1-1-1-1-1, normalised by 10.
         tp_scores = (
-            max(1.0 - mate, 0.0)
-            + max(1.0 - mase, 0.0)
-            + max(1.0 - maoe, 0.0)
-            + max(1.0 - mave, 0.0)
-            + max(1.0 - maae, 0.0)
+            max(1.0 - mate, 0.0) + max(1.0 - mase, 0.0) + max(1.0 - maoe, 0.0) + max(1.0 - mave, 0.0) + max(1.0 - maae, 0.0)
         )
         nds = (5.0 * map_val + tp_scores) / 10.0
         score["nds"] = round(nds, 4)
