@@ -1,0 +1,17 @@
+services:
+
+  autonomy_datasets:
+    image: ghcr.io/thinking-cars/autonomy_datasets:latest_init_ci
+    command: ros2 launch autonomy_datasets autonomy_datasets.launch.py rviz:=no dataset:=nuscenes
+    environment:
+      ZENOH_CONFIG_OVERRIDE: routing/router/peers_failover_brokering=true
+    volumes:
+      - $DATASET_DIR:/datasets
+  
+  autonomy_benchmarks:
+    image: ghcr.io/thinking-cars/autonomy_benchmarks-internal:latest-dev_init_ci
+    command: sleep infinity
+    environment:
+      ZENOH_CONFIG_OVERRIDE: connect/endpoints=["tcp/autonomy_datasets:7447"]
+    volumes:
+      - .:/docker-ros/ws/src/target

@@ -17,10 +17,9 @@ Benchmarking suite for automated driving tasks
 
 | Argument | Default | Description |
 | --- | --- | --- |
-| `input_topic` | `"~/input"` | TODO |
-| `output_topic` | `"~/output"` | TODO |
-| `name` | `"autonomy_benchmarks"` | TODO |
-| `namespace` | `""` | TODO |
-| `params` | `os.path.join(get_package_share_directory("autonomy_benchmarks"), "config", "params.yml")` | TODO |
-| `log_level` | `"info"` | TODO |
-| `use_sim_time` | `"false"` | TODO |
+| `benchmark` | `"nuscenes_lidar_object_detection"` | benchmark name |
+| `name` | `"autonomy_benchmarks"` | node name |
+| `namespace` | `""` | node namespace |
+| `params` | `os.path.join(get_package_share_directory("autonomy_benchmarks"), "config", "params.yml")` | node parameter file path |
+| `log_level` | `"info"` | ros logging level |
+| `use_sim_time` | `"true"` | use simulation time |
