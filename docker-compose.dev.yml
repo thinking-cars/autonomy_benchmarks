@@ -1,17 +1,24 @@
 services:
 
+  zenoh-router:
+    extends:
+      file: docker-compose.yml
+      service: zenoh-router
+
   autonomy_datasets:
-    image: ghcr.io/thinking-cars/autonomy_datasets:latest_init_ci
-    command: ros2 launch autonomy_datasets autonomy_datasets.launch.py rviz:=no dataset:=nuscenes
-    environment:
-      ZENOH_CONFIG_OVERRIDE: routing/router/peers_failover_brokering=true
+    extends:
+      file: docker-compose.yml
+      service: autonomy_datasets
+    image: ghcr.io/thinking-cars/autonomy_datasets:latest-dev_init_ci
+    command: sleep infinity
     volumes:
-      - $DATASET_DIR:/datasets
+      - ../autonomy_datasets:/docker-ros/ws/src/target
   
   autonomy_benchmarks:
+    extends:
+      file: docker-compose.yml
+      service: autonomy_benchmarks
     image: ghcr.io/thinking-cars/autonomy_benchmarks-internal:latest-dev_init_ci
     command: sleep infinity
-    environment:
-      ZENOH_CONFIG_OVERRIDE: connect/endpoints=["tcp/autonomy_datasets:7447"]
     volumes:
       - .:/docker-ros/ws/src/target

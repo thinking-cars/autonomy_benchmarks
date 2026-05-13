@@ -61,11 +61,8 @@ New benchmarks can easily be added as described in [Adding more Benchmarks](docs
     ```
 1. Install the recommended VS Code extensions.
     > *Ctrl+Shift+P / Extensions: Show Recommended Extensions / Install Workspace Recommended Extensions (Cloud Download Icon)*
-1. Use the provided docker compose file to start an `autonomy_datasets` container along with an `autonomy_benchmarks` development container.
-    ```bash
-    docker compose -f docker-compose.dev.yml up
-    ```
-1. Attach VS Code to the development container via *F1 / Dev Containers: Attach to Running Container...* and use *File / Open Folder* to navigate to `/docker-ros/ws/src/target`. The local git repository is mounted into the container so that changes will persist a container restart.
+1. Use the provided [devcontainer configuration](.devcontainer/devcontainer.json) to start all relevant containers and attach to the development container.
+    > *F1 / Dev Containers: Rebuild and Reopen in Container*
 
 ### Build
 
