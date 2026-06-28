@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import os
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 class AutonomyBenchmark(ABC):
@@ -43,17 +43,14 @@ class AutonomyBenchmark(ABC):
         """
 
     @abstractmethod
-    def compute_sample_metrics(self, prediction: Any, label: Any, sample_id: Optional[str] = None) -> Dict[str, Any]:
-        """Compute metrics for a single (prediction, label) pair.
+    def compute_sample_metrics(self, **kwargs) -> Dict[str, Any]:
+        """Compute metrics for a single sample.
 
         Parameters
         ----------
-        prediction:
-            The model's output for one sample.
-        label:
-            The ground-truth for the same sample.
-        sample_id:
-            An optional identifier for the sample.
+        **kwargs:
+            Arbitrary keyword arguments representing the model input and
+            ground-truth label for a single sample.
 
         Returns
         -------
@@ -72,44 +69,20 @@ class AutonomyBenchmark(ABC):
 
         Returns
         -------
-        A dictionary mapping aggregated metric names to their values (e.g.
-        mean-AP, precision, recall).
+        A dictionary mapping aggregated metric names to their values.
         """
 
     # ------------------------------------------------------------------
     # Concrete helpers
     # ------------------------------------------------------------------
 
-    def record_sample(self, prediction: Any, label: Any, sample_id: Optional[str] = None, **auxiliary: Any) -> Dict[str, Any]:
-        """Compute and store per-sample metrics.
-
-        This is the main entry point used by the evaluation loop.  Any
-        keyword arguments in *auxiliary* are forwarded verbatim to
-        :meth:`compute_sample_metrics`, allowing benchmarks to receive
-        auxiliary per-sample data (e.g. static-map annotations) without
-        changing the abstract interface.
-        """
-        metrics = self.compute_sample_metrics(prediction, label, sample_id, **auxiliary)
-        entry: Dict[str, Any] = {"sample_id": sample_id, "metrics": metrics}
-        self._sample_results.append(entry)
-        return entry
-
-    def finalize(self) -> Dict[str, Any]:
-        """Compute aggregated metrics and return the full results payload."""
-        aggregated = self.compute_aggregated_metrics(self._sample_results)
-        return {
-            "benchmark": self.name,
-            "description": self.description,
-            "num_samples": len(self._sample_results),
-            "aggregated_metrics": aggregated,
-            "sample_results": self._sample_results,
-        }
-
-    def save_results(self, output_path: str) -> str:
+    def save_results(self, results: Dict[str, Any], output_path: str) -> str:
         """Finalize and write results to a JSON file.
 
         Parameters
         ----------
+        results:
+            The results dictionary to save.
         output_path:
             Path to the output JSON file.
 
@@ -117,7 +90,6 @@ class AutonomyBenchmark(ABC):
         -------
         The absolute path of the written file.
         """
-        results = self.finalize()
         os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
         with open(output_path, "w") as fh:
             json.dump(results, fh, indent=2, default=str)

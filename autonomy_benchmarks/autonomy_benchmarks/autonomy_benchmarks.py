@@ -17,22 +17,15 @@ class AutonomyBenchmarks(Node):
         super().__init__("autonomy_benchmarks")
 
         self.auto_reconfigurable_params: list[str] = []
-        # TODO(unknown): remove sample parameter
-        self.param = self.declare_and_load_parameter(
-            name="param",
-            param_type=rclpy.Parameter.Type.DOUBLE,
-            description="TODO",
-            default=1.0,
-            from_value=0.0,
-            to_value=10.0,
-            step_value=0.1,
-        )
         self.benchmark = self.declare_and_load_parameter(
             name="benchmark",
             param_type=rclpy.Parameter.Type.STRING,
             description="benchmark name",
-            default="nuscenes_lidar_object_detection",
+            is_required=True,
+            add_to_auto_reconfigurable_params=False,
         )
+
+        self.benchmark_handler = None
 
         self.setup()
 
@@ -141,35 +134,22 @@ class AutonomyBenchmarks(Node):
         self.data_subscriptions: dict[str, Optional[message_filters.Subscriber]] = {}
 
         # get handler for specified benchmark
-        benchmark_handler = None
-        if self.benchmark == "waymo_camera_object_detection_2d":
-            from autonomy_benchmarks.benchmarks.camera_object_detection_2d.WaymoCameraObjectDetection2D import (
-                WaymoCameraObjectDetection2D,
+        if self.benchmark == "nuscenes_object_tracking":
+            from autonomy_benchmarks.benchmarks.object_tracking.NuscenesObjectTracking import (
+                NuscenesObjectTracking,
             )
 
-            benchmark_handler = WaymoCameraObjectDetection2D()
-        elif self.benchmark == "waymo_camera_object_detection_3d":
-            from autonomy_benchmarks.benchmarks.camera_object_detection_3d.WaymoCameraObjectDetection3D import (
-                WaymoCameraObjectDetection3D,
-            )
-
-            benchmark_handler = WaymoCameraObjectDetection3D()
-        elif self.benchmark == "nuscenes_lidar_object_detection":
-            from autonomy_benchmarks.benchmarks.lidar_object_detection.NuscenesLidarObjectDetection import (
-                NuscenesLidarObjectDetection,
-            )
-
-            benchmark_handler = NuscenesLidarObjectDetection()
+            self.benchmark_handler = NuscenesObjectTracking()
         else:
             self.get_logger().fatal(f"Benchmark '{self.benchmark}' not recognized, exiting")
             raise SystemExit(1)
 
         # create subscriptions for benchmark data inputs
-        for msg_topic, msg_type in benchmark_handler.required_inputs().items():
+        for msg_topic, msg_type in self.benchmark_handler.required_inputs().items():
             self.data_subscriptions[msg_topic] = message_filters.Subscriber(
                 self,
                 msg_type,
-                msg_topic,
+                f"~/{msg_topic}",
                 qos_profile=QoSProfile(
                     reliability=ReliabilityPolicy.RELIABLE,
                     durability=DurabilityPolicy.VOLATILE,
@@ -188,7 +168,12 @@ class AutonomyBenchmarks(Node):
         """Callback to evaluate a single sample when all required input messages have been received"""
         self.get_logger().info("Received synchronized input messages, evaluating sample...")
 
-        # TODO(unknown): implement sample evaluation logic using benchmark handler
+        if self.benchmark_handler is None:
+            self.get_logger().fatal("Benchmark handler not initialized, exiting")
+            raise SystemExit(1)
+
+        messages = {topic: msg for topic, msg in zip(self.benchmark_handler.required_inputs().keys(), args)}
+        self.benchmark_handler.compute_sample_metrics(**messages)
 
 
 def main():
