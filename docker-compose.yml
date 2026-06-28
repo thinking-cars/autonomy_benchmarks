@@ -27,18 +27,20 @@ services:
               count: all
               capabilities: [gpu]
 
-  autonomy_benchmarks:
+  autonomy_benchmarks_object_tracking:
     depends_on:
       - autonomy_datasets
     image: ghcr.io/thinking-cars/autonomy_benchmarks-internal:latest_init_ci
     environment:
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp
-      BENCHMARK: ${BENCHMARK:-nuscenes_object_tracking}
     command:
       - /bin/bash
       - -ic
       - |
-        ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py benchmark:=$${BENCHMARK}
+        ros2 launch autonomy_benchmarks benchmark_object_tracking.launch.py \
+          benchmark:=nuscenes_object_tracking \
+          objects_tracked:=/object_list/lidar_01 \
+          objects_truth:=/object_list/lidar_01
 
   autoware_multi_object_tracker:
     depends_on:

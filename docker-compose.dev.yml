@@ -7,10 +7,10 @@ services:
       file: docker-compose.yml
       service: autonomy_datasets
   
-  autonomy_benchmarks:
+  autonomy_benchmarks_object_tracking:
     extends:
       file: docker-compose.yml
-      service: autonomy_benchmarks
+      service: autonomy_benchmarks_object_tracking
     image: ghcr.io/thinking-cars/autonomy_benchmarks-internal:latest-dev_init_ci
     command: sleep infinity
     volumes:
