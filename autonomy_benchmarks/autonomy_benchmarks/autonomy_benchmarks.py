@@ -173,7 +173,16 @@ class AutonomyBenchmarks(Node):
             raise SystemExit(1)
 
         messages = {topic: msg for topic, msg in zip(self.benchmark_handler.required_inputs().keys(), args)}
-        self.benchmark_handler.compute_sample_metrics(**messages)
+
+        # TODO(RaphvK): add scene_id to messages if available, otherwise use None
+
+        sample_result = self.benchmark_handler.compute_sample_metrics(scene_id=None, **messages)
+        self.benchmark_handler._sample_results.append(sample_result)
+
+        # TODO(RaphvK): call self.benchmark_handler.aggregate_metrics() when all samples have been processed
+        if False:
+            aggregated_metrics = self.benchmark_handler.compute_aggregated_metrics(self.benchmark_handler._sample_results)
+            self.get_logger().info(f"Aggregated metrics: {aggregated_metrics}")
 
 
 def main():
