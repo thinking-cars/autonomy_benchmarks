@@ -1,35 +1,24 @@
+name: ${USER}-autonomy-benchmarks
+
 services:
 
-  zenoh-router:
-    image: ghcr.io/thinking-cars/autonomy_datasets:latest_init_ci
-    command: ros2 run rmw_zenoh_cpp rmw_zenohd
-    environment:
-      RMW_IMPLEMENTATION: rmw_zenoh_cpp
-      ZENOH_CONFIG_OVERRIDE: listen/endpoints=["tcp/[::]:7447"];transport/shared_memory/enabled=true
-    healthcheck:
-      test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/7447"]
-      interval: 1s
-      timeout: 1s
-      retries: 5
-    ipc: shareable
-    shm_size: 4gb
-    ulimits:
-      memlock:
-        soft: 4294967296
-        hard: 4294967296
-
   autonomy_datasets:
-    image: ghcr.io/thinking-cars/autonomy_datasets:latest_init_ci
-    command: ros2 launch autonomy_datasets autonomy_datasets.launch.py rviz:=yes dataset:=nuscenes
+    image: ghcr.io/thinking-cars/autonomy_datasets:latest_benchmark_ci
+    command:
+      - /bin/bash
+      - -ic
+      - |
+        ros2 launch autonomy_datasets autonomy_datasets.launch.py dataset:=$${DATASET} rviz:=yes wait_for_ack:=true loop:=yes
     environment:
-      RMW_IMPLEMENTATION: rmw_zenoh_cpp
-      ZENOH_CONFIG_OVERRIDE: mode="client";connect/endpoints=["tcp/zenoh-router:7447"];transport/shared_memory/enabled=true
-      DISPLAY: ${DISPLAY}
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+      DISPLAY: ${DISPLAY:-""}
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: all
+      DATASET: ${DATASET:-nuscenes}  # nuscenes, waymo_open_dataset, nvidia_physicalai_av_dataset
     volumes:
+      - ./config.rviz:/docker-ros/ws/install/autonomy_datasets/share/autonomy_datasets/config/config.rviz
+      - ${DATASET_DIR}:/datasets
       - /tmp/.X11-unix:/tmp/.X11-unix
-      - $DATASET_DIR:/datasets
     deploy:
       resources:
         reservations:
@@ -37,20 +26,34 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-    ipc: service:zenoh-router
-    ulimits:
-      memlock:
-        soft: 4294967296
-        hard: 4294967296
-  
+
   autonomy_benchmarks:
+    depends_on:
+      - autonomy_datasets
     image: ghcr.io/thinking-cars/autonomy_benchmarks-internal:latest_init_ci
-    command: ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py benchmark:=nuscenes_lidar_object_detection
     environment:
-      RMW_IMPLEMENTATION: rmw_zenoh_cpp
-      ZENOH_CONFIG_OVERRIDE: mode="client";connect/endpoints=["tcp/zenoh-router:7447"];transport/shared_memory/enabled=true
-    ipc: service:zenoh-router
-    ulimits:
-      memlock:
-        soft: 4294967296
-        hard: 4294967296
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+      BENCHMARK: ${BENCHMARK:-nuscenes_object_tracking}
+    command:
+      - /bin/bash
+      - -ic
+      - |
+        ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py benchmark:=$${BENCHMARK}
+
+  autoware_multi_object_tracker:
+    depends_on:
+      - autonomy_datasets
+    image: ghcr.io/thinking-cars/autoware_multi_object_tracker:latest_init_ci
+    environment:
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+      INPUT_DETECTION01_OBJECTS: /object_list/lidar_01
+      INPUT_DETECTION01_CHANNEL: detected_objects
+      OUTPUT_OBJECTS: /object_list/tracked_objects
+    command:
+      - /bin/bash
+      - -ic
+      - |
+        ros2 launch autoware_multi_object_tracker multi_object_tracker.launch.xml \
+          input/detection01/objects:=$${INPUT_DETECTION01_OBJECTS} \
+          input/detection01/channel:=$${INPUT_DETECTION01_CHANNEL} \
+          output/objects:=$${OUTPUT_OBJECTS}

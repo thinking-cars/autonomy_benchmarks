@@ -1,18 +1,11 @@
-services:
+name: ${USER}-autonomy-benchmarks
 
-  zenoh-router:
-    extends:
-      file: docker-compose.yml
-      service: zenoh-router
+services:
 
   autonomy_datasets:
     extends:
       file: docker-compose.yml
       service: autonomy_datasets
-    image: ghcr.io/thinking-cars/autonomy_datasets:latest-dev_init_ci
-    command: sleep infinity
-    volumes:
-      - ../autonomy_datasets:/docker-ros/ws/src/target
   
   autonomy_benchmarks:
     extends:
@@ -22,3 +15,9 @@ services:
     command: sleep infinity
     volumes:
       - .:/docker-ros/ws/src/target
+      - ${HOME}/.claude:/root/.claude
+
+  autoware_multi_object_tracker:
+    extends:
+      file: docker-compose.yml
+      service: autoware_multi_object_tracker
