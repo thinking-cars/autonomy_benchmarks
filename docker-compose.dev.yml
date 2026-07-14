@@ -1,0 +1,35 @@
+name: ${USER}-autonomy-benchmarks
+
+services:
+
+  autonomy_benchmarks:
+    extends:
+      file: docker-compose.yml
+      service: autonomy_benchmarks
+    image: ghcr.io/thinking-cars/autonomy_benchmarks-internal:latest-dev
+    command: sleep infinity
+    volumes:
+      - .:/docker-ros/ws/src/target
+
+  autoware_lidar_centerpoint:
+    extends:
+      file: docker-compose.yml
+      service: autoware_lidar_centerpoint
+    # image: ghcr.io/thinking-cars/autoware_lidar_centerpoint:latest-dev_benchmark_ci
+    # command: sleep infinity
+    # volumes:
+    #   - ../autoware_lidar_centerpoint:/docker-ros/ws/src/target
+
+  focalformer3d-detector:
+    extends:
+      file: docker-compose.yml
+      service: focalformer3d-detector
+
+  autonomy_datasets:
+    extends:
+      file: docker-compose.yml
+      service: autonomy_datasets
+    # image: ghcr.io/thinking-cars/autonomy_datasets:latest-dev_benchmark_ci
+    # command: sleep infinity
+    # volumes:
+    #   - ../autonomy_datasets:/docker-ros/ws/src/target

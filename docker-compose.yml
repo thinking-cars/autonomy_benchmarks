@@ -1,0 +1,70 @@
+name: ${USER}-autonomy-benchmarks
+
+services:
+
+  autonomy_benchmarks:
+    image: ghcr.io/thinking-cars/autonomy_benchmarks-internal:latest
+    command: ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py benchmark:=nuscenes_lidar_object_detection prediction:=/object_list/prediction label:=/object_list/lidar_01
+    environment:
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+
+  autonomy_datasets:
+    image: ghcr.io/thinking-cars/autonomy_datasets:latest_benchmark_ci
+    command: ros2 launch autonomy_datasets autonomy_datasets.launch.py dataset:=nuscenes
+    environment:
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+      DISPLAY: ${DISPLAY:-""}
+    volumes:
+      - ./conf.rviz:/docker-ros/ws/install/autonomy_datasets/share/autonomy_datasets/config/config.rviz
+      - $DATASET_DIR:/datasets
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    depends_on:
+      - autonomy_benchmarks
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  autoware_lidar_centerpoint:
+    profiles:
+      - centerpoint
+    depends_on:
+      - autonomy_datasets
+    image: ghcr.io/thinking-cars/autoware_lidar_centerpoint:latest_benchmark_ci
+    environment:
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+    command: ros2 launch autoware_lidar_centerpoint lidar_centerpoint.launch.xml model_name:=centerpoint input/pointcloud:=/lidar_01/point_cloud output/objects:=/object_list/prediction use_sim_time:=true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  focalformer3d-detector:
+    profiles:
+      - focalformer3d
+    depends_on:
+      - autonomy_datasets
+    image: ghcr.io/thinking-cars/focalformer3d_detector:latest_benchmark_ci
+    environment:
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+    command:
+      - /bin/bash
+      - -ic
+      - |
+        ros2 launch focalformer3d_detector focalformer3d_detector_launch.py \
+          use_sim_time:=true \
+          input_topic:=/lidar_01/point_cloud \
+          output_topic:=/object_list/prediction
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

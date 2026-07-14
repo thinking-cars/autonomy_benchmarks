@@ -1,0 +1,45 @@
+{
+
+  // set UI container name
+  "name": "${localEnv:USER}-${localWorkspaceFolderBasename}",
+
+  // attach to container from docker compose setup
+  "dockerComposeFile": ["../docker-compose.dev.yml"],
+  "service": "autonomy_benchmarks",
+
+  // set up git pre-commit hooks
+  "onCreateCommand": "pip install pre-commit && apt update && apt install locales -y && locale-gen en_US.UTF-8",
+  "postCreateCommand": "bash -lc 'if command -v pre-commit >/dev/null 2>&1 && [ -f .pre-commit-config.yaml ]; then pre-commit install --install-hooks; fi'",
+
+  // mount VS Code workspace to docker-ros workspace
+  "workspaceFolder": "/docker-ros/ws/src/target",
+
+  // https://containers.dev/features
+  "features": {},
+
+  // VS Code settings and extensions
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "ROS2.rosSetupScript": "/docker-ros/ws/install/setup.bash"
+      },
+      "extensions": [
+        "althack.ament-task-provider",
+        "anthropic.claude-code",
+        "cschlosser.doxdocgen",
+        "github.copilot-chat",
+        "github.copilot",
+        "mhutchie.git-graph",
+        "ms-python.black-formatter",
+        "ms-python.flake8",
+        "ms-python.python",
+        "ms-vscode.cpp-devtools",
+        "ms-vscode.cpptools-themes",
+        "ms-vscode.cpptools",
+        "njpwerner.autodocstring",
+        "openai.chatgpt",
+        "Ranch-Hand-Robotics.rde-pack"
+      ]
+    }
+  }
+}

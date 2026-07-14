@@ -1,21 +1,37 @@
-# openads_ros2_demo_repository
+# autonomy_benchmarks-internal
 
 <p align="center">
-  <a href="https://github.com/openads-project"><img src="https://img.shields.io/badge/OpenADS-f5ff01"/></a>
   <a href="https://www.ros.org"><img src="https://img.shields.io/badge/ROS 2-jazzy-22314e"/></a>
-  <a href="https://github.com/openads-project/openads_ros2_demo_repository/releases/latest"><img src="https://img.shields.io/github/v/release/openads-project/openads_ros2_demo_repository"/></a>
-  <a href="https://github.com/openads-project/openads_ros2_demo_repository/blob/main/LICENSE"><img src="https://img.shields.io/github/license/openads-project/openads_ros2_demo_repository"/></a>
+  <a href="https://github.com/thinking-cars/autonomy_benchmarks-internal/releases/latest"><img src="https://img.shields.io/github/v/release/thinking-cars/autonomy_benchmarks-internal"/></a>
+  <a href="https://github.com/thinking-cars/autonomy_benchmarks-internal/blob/main/LICENSE"><img src="https://img.shields.io/github/license/thinking-cars/autonomy_benchmarks-internal"/></a>
   <br>
-  <a href="https://github.com/openads-project/openads_ros2_demo_repository/actions/workflows/docker-ros.yml"><img src="https://github.com/openads-project/openads_ros2_demo_repository/actions/workflows/docker-ros.yml/badge.svg"/></a>
-  <a href="https://openads-project.github.io/openads_ros2_demo_repository"><img src="https://github.com/openads-project/openads_ros2_demo_repository/actions/workflows/docs.yml/badge.svg"/></a>
-  <a href="https://github.com/openads-project/openads_ros2_demo_repository/actions/workflows/consistency.yml"><img src="https://github.com/openads-project/openads_ros2_demo_repository/actions/workflows/consistency.yml/badge.svg"/></a>
+  <a href="https://github.com/thinking-cars/autonomy_benchmarks-internal/actions/workflows/docker-ros.yml"><img src="https://github.com/thinking-cars/autonomy_benchmarks-internal/actions/workflows/docker-ros.yml/badge.svg"/></a>
+  <a href="https://github.com/thinking-cars/autonomy_benchmarks-internal/actions/workflows/compose-oci.yml"><img src="https://github.com/thinking-cars/autonomy_benchmarks-internal/actions/workflows/compose-oci.yml/badge.svg"/></a>
+  <a href="https://thinking-cars.github.io/autonomy_benchmarks-internal"><img src="https://github.com/thinking-cars/autonomy_benchmarks-internal/actions/workflows/docs.yml/badge.svg"/></a>
+  <a href="https://github.com/thinking-cars/autonomy_benchmarks-internal/actions/workflows/consistency.yml"><img src="https://github.com/thinking-cars/autonomy_benchmarks-internal/actions/workflows/consistency.yml/badge.svg"/></a>
 </p>
 
-**Demo repository for an OpenADS module**
+> This repository will be part of the **Autonomy.Hub Ecosystem**
 
-This repository serves as a demo for an OpenADS module, showcasing the structure and documentation style for OpenADS packages. It includes a simple ROS 2 node that subscribes to a topic, processes the data, and publishes the result. This is a short description of the repository and its purpose.
+As part of the Autonomy.Hub Ecosystem, **Autonomy.Benchmarks** enables the Automated Driving community to easily benchmark their automated driving building blocks across different tasks and datasets:
 
-<img src="https://raw.githubusercontent.com/ika-rwth-aachen/etsi_its_messages/refs/heads/main/assets/teaser.gif" width=800>
+- 🔄 **Unified ROS 2 Interface**: Work with multiple datasets using the benefits of the ROS 2 ecosystem
+- 📊 **Comprehensive Benchmarks**: Use the provided benchmarks with [Autonomy.Datasets](https://github.com/thinking-cars/autonomy_datasets) to benchmark building blocks across different automated driving tasks
+- ⚡ **Efficient Data Pipeline**: Works seamlessly with preprocessed Rosbag files from [Autonomy.Datasets](https://github.com/thinking-cars/autonomy_datasets) for fast execution during development
+- 🐳 **Dockerized Environment**: Reproducible setup with all dependencies included
+- 🔌 **Modular Architecture**: Easy integration with other ROS 2 packages
+
+## Supported Benchmarks
+
+This repository supports various automated driving evaluation benchmarks.
+
+Detailed metric definitions and computation notes are documented in [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md).
+
+> [**Contributions**](docs/IMPLEMENTATION.md#adding-more-benchmarks) adding more benchmarks are welcome
+
+| Benchmark | Challenge | Dataset | Task |
+| --------- | --------- | ------- | ---- |
+| [**nuScenes 3D Lidar Object Detection**](docs/IMPLEMENTATION.md#3d-lidar-object-detection) | [![3D Object Detection Challenge](https://img.shields.io/badge/origin-3D_Object_Detection_Challenge-green)](https://www.nuscenes.org/object-detection) | [nuScenes](https://github.com/thinking-cars/autonomy_datasets) | 3D bounding box detection from lidar |
 
 <p align="center">
   <strong>🚀 <a href="#-quick-start">Quick Start</a></strong> • <strong>💻 <a href="#-development">Development</a></strong> • <strong>📝 <a href="#-documentation">Documentation</a></strong>
@@ -24,14 +40,27 @@ This repository serves as a demo for an OpenADS module, showcasing the structure
 
 ## 🚀 Quick Start
 
-1. Start a container of the pre-built runtime image.
-    ```bash
-    docker run --rm -it ghcr.io/openads-project/openads_ros2_demo_repository:latest bash
-    ```
-1. Inside the container, launch the pre-built nodes.
-    ```bash
-    ros2 launch ros2_demo_package ros2_demo_node_launch.py
-    ```
+Clone [autonomy_datasets](https://github.com/thinking-cars/autonomy_datasets) and follow its setup instructions to prepare your dataset.
+
+Use the provided [docker-compose.yml](docker-compose.yml) to start the full pipeline — dataset publisher, system-under-test, and benchmark node:
+
+```bash
+# enable GUI output from Docker container
+xhost +local:
+
+# pull and start Docker containers
+export COMPOSE_PROFILES="focalformer3d"  # or 'centerpoint'
+docker compose pull
+docker compose up -d
+# stop containers once finished
+docker compose down
+```
+
+Configure the benchmark task and dataset via ROS launch arguments in [docker-compose.yml](docker-compose.yml):
+
+```yaml
+command: ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py benchmark:=nuscenes_lidar_object_detection prediction:=$your_prediction_topic label:=$your_label_topic
+```
 
 ## 💻 Development
 
@@ -39,11 +68,11 @@ This repository serves as a demo for an OpenADS module, showcasing the structure
 
 1. Clone the repository.
     ```bash
-    git clone https://github.com/openads-project/openads_ros2_demo_repository.git
+    git clone https://github.com/thinking-cars/autonomy_benchmarks-internal.git
     ```
 1. Initialize the [`.openads-dev-environment`](https://github.com/openads-project/openads-dev-environment) submodule containing development environment configuration.
     ```bash
-    cd openads_ros2_demo_repository
+    cd autonomy_benchmarks-internal
     git submodule update --init --recursive
     ```
 1. Open the repository in [Visual Studio Code](https://code.visualstudio.com).
@@ -76,12 +105,11 @@ colcon test-result --verbose
 
 ## 📝 Documentation
 
-Package and node interfaces are documented in the respective package READMEs listed below. Implementation details are found in the [Source Code Documentation](https://openads-project.github.io/openads_ros2_demo_repository).
+Package and node interfaces are documented in the respective package READMEs listed below. Implementation details are found in the [Source Code Documentation](https://thinking-cars.github.io/autonomy_benchmarks-internal).
 
 | Package | Description |
 | --- | --- |
-| [ros2_demo_package](ros2_demo_package/README.md) | ROS 2 demo package |
-| [ros2_demo_package_interfaces](ros2_demo_package_interfaces/README.md) | ROS interface definitions for ros2_demo_package |
+| [autonomy_benchmarks](autonomy_benchmarks/README.md) | Benchmarking suite for automated driving tasks |
 
 ## ⚖️ Licensing
 
@@ -89,18 +117,4 @@ The source code in this repository is licensed under Apache-2.0, see [LICENSE](L
 
 ## 🙏 Acknowledgements
 
-> [!IMPORTANT]
-> This repository is part of [***OpenADS***](https://github.com/openads-project), the *Open Automated Driving Systems* project. *OpenADS* and its modules have been initiated and are currently being maintained by the [**Institute for Automotive Engineering (ika) at RWTH Aachen University**](https://www.ika.rwth-aachen.de/de/).
-
-Development and maintenance of this repository are supported by the following projects. We acknowledge the funding of the respective institutions.
-
-| Project | Funding Institution | Grant Number |
-| --- | --- | --- |
-| Demo Project | Demo Funding Institution | Demo Grant Number |
-
-<p>
-  <img src="https://www.drought.uni-freiburg.de/stressres/images/bmftr-logo/image" height=70>
-  <img src="https://ec.europa.eu/regional_policy/images/information-sources/logo-download-center/eu_funded_en.jpg" height=70>
-</p>
-
-<sub><sup>Funded by the European Union. Views and opinions expressed are however those of the author(s) only and do not necessarily reflect those of the European Union or the European Climate, Infrastructure and Environment Executive Agency (CINEA). Neither the European Union nor CINEA can be held responsible for them.</sup></sub>
+This project is maintained by [Thinking Cars](https://thinking-cars.de). We appreciate contributions and are happy to discuss potential collaborations.
