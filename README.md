@@ -1,14 +1,14 @@
-# autonomy_benchmarks-internal
+# autonomy_benchmarks
 
 <p align="center">
   <a href="https://www.ros.org"><img src="https://img.shields.io/badge/ROS 2-jazzy-22314e"/></a>
-  <a href="https://github.com/thinking-cars/autonomy_benchmarks-internal/releases/latest"><img src="https://img.shields.io/github/v/release/thinking-cars/autonomy_benchmarks-internal"/></a>
-  <a href="https://github.com/thinking-cars/autonomy_benchmarks-internal/blob/main/LICENSE"><img src="https://img.shields.io/github/license/thinking-cars/autonomy_benchmarks-internal"/></a>
+  <a href="https://github.com/thinking-cars/autonomy_benchmarks/releases/latest"><img src="https://img.shields.io/github/v/release/thinking-cars/autonomy_benchmarks"/></a>
+  <a href="https://github.com/thinking-cars/autonomy_benchmarks/blob/main/LICENSE"><img src="https://img.shields.io/github/license/thinking-cars/autonomy_benchmarks"/></a>
   <br>
-  <a href="https://github.com/thinking-cars/autonomy_benchmarks-internal/actions/workflows/docker-ros.yml"><img src="https://github.com/thinking-cars/autonomy_benchmarks-internal/actions/workflows/docker-ros.yml/badge.svg"/></a>
-  <a href="https://github.com/thinking-cars/autonomy_benchmarks-internal/actions/workflows/compose-oci.yml"><img src="https://github.com/thinking-cars/autonomy_benchmarks-internal/actions/workflows/compose-oci.yml/badge.svg"/></a>
-  <a href="https://thinking-cars.github.io/autonomy_benchmarks-internal"><img src="https://github.com/thinking-cars/autonomy_benchmarks-internal/actions/workflows/docs.yml/badge.svg"/></a>
-  <a href="https://github.com/thinking-cars/autonomy_benchmarks-internal/actions/workflows/consistency.yml"><img src="https://github.com/thinking-cars/autonomy_benchmarks-internal/actions/workflows/consistency.yml/badge.svg"/></a>
+  <a href="https://github.com/thinking-cars/autonomy_benchmarks/actions/workflows/docker-ros.yml"><img src="https://github.com/thinking-cars/autonomy_benchmarks/actions/workflows/docker-ros.yml/badge.svg"/></a>
+  <a href="https://github.com/thinking-cars/autonomy_benchmarks/actions/workflows/compose-oci.yml"><img src="https://github.com/thinking-cars/autonomy_benchmarks/actions/workflows/compose-oci.yml/badge.svg"/></a>
+  <a href="https://thinking-cars.github.io/autonomy_benchmarks"><img src="https://github.com/thinking-cars/autonomy_benchmarks/actions/workflows/docs.yml/badge.svg"/></a>
+  <a href="https://github.com/thinking-cars/autonomy_benchmarks/actions/workflows/consistency.yml"><img src="https://github.com/thinking-cars/autonomy_benchmarks/actions/workflows/consistency.yml/badge.svg"/></a>
 </p>
 
 > This repository will be part of the **Autonomy.Hub Ecosystem**
@@ -68,11 +68,11 @@ command: ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py benchmark
 
 1. Clone the repository.
     ```bash
-    git clone https://github.com/thinking-cars/autonomy_benchmarks-internal.git
+    git clone https://github.com/thinking-cars/autonomy_benchmarks.git
     ```
 1. Initialize the [`.openads-dev-environment`](https://github.com/openads-project/openads-dev-environment) submodule containing development environment configuration.
     ```bash
-    cd autonomy_benchmarks-internal
+    cd autonomy_benchmarks
     git submodule update --init --recursive
     ```
 1. Open the repository in [Visual Studio Code](https://code.visualstudio.com).
@@ -105,7 +105,7 @@ colcon test-result --verbose
 
 ## 📝 Documentation
 
-Package and node interfaces are documented in the respective package READMEs listed below. Implementation details are found in the [Source Code Documentation](https://thinking-cars.github.io/autonomy_benchmarks-internal).
+Package and node interfaces are documented in the respective package READMEs listed below. Implementation details are found in the [Source Code Documentation](https://thinking-cars.github.io/autonomy_benchmarks).
 
 | Package | Description |
 | --- | --- |
