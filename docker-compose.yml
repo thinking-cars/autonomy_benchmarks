@@ -68,3 +68,21 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+
+  autoware_multi_object_tracker:
+    depends_on:
+      - autonomy_datasets
+    image: ghcr.io/thinking-cars/autoware_multi_object_tracker:latest_init_ci
+    environment:
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+      INPUT_DETECTION01_OBJECTS: /object_list/lidar_01
+      INPUT_DETECTION01_CHANNEL: detected_objects
+      OUTPUT_OBJECTS: /object_list/tracked_objects
+    command:
+      - /bin/bash
+      - -ic
+      - |
+        ros2 launch autoware_multi_object_tracker multi_object_tracker.launch.xml \
+          input/detection01/objects:=$${INPUT_DETECTION01_OBJECTS} \
+          input/detection01/channel:=$${INPUT_DETECTION01_CHANNEL} \
+          output/objects:=$${OUTPUT_OBJECTS}

@@ -33,3 +33,8 @@ services:
     # command: sleep infinity
     # volumes:
     #   - ../autonomy_datasets:/docker-ros/ws/src/target
+
+  autoware_multi_object_tracker:
+    extends:
+      file: docker-compose.yml
+      service: autoware_multi_object_tracker
