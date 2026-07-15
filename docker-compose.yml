@@ -4,7 +4,7 @@ services:
 
   autonomy_benchmarks:
     image: ghcr.io/thinking-cars/autonomy_benchmarks-internal:latest
-    command: ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py benchmark:=nuscenes_lidar_object_detection prediction:=/object_list/prediction label:=/object_list/lidar_01
+    command: ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py benchmark:=nuscenes_lidar_object_detection prediction:=/object_list/detected label:=/object_list/lidar_01
     environment:
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp
 
@@ -15,7 +15,8 @@ services:
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp
       DISPLAY: ${DISPLAY:-""}
     volumes:
-      - ./conf.rviz:/docker-ros/ws/install/autonomy_datasets/share/autonomy_datasets/config/config.rviz
+      - ./config/autonomy_datasets/conf.rviz:/docker-ros/ws/install/autonomy_datasets/share/autonomy_datasets/config/config.rviz
+      - ./config/autonomy_datasets/params_nuscenes.yml:/docker-ros/ws/install/autonomy_datasets/share/autonomy_datasets/config/params_nuscenes.yml
       - $DATASET_DIR:/datasets
       - /tmp/.X11-unix:/tmp/.X11-unix
     depends_on:
@@ -36,7 +37,7 @@ services:
     image: ghcr.io/thinking-cars/autoware_lidar_centerpoint:latest_benchmark_ci
     environment:
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp
-    command: ros2 launch autoware_lidar_centerpoint lidar_centerpoint.launch.xml model_name:=centerpoint input/pointcloud:=/lidar_01/point_cloud output/objects:=/object_list/prediction use_sim_time:=true
+    command: ros2 launch autoware_lidar_centerpoint lidar_centerpoint.launch.xml model_name:=centerpoint input/pointcloud:=/lidar_01/point_cloud output/objects:=/object_list/detected use_sim_time:=true
     deploy:
       resources:
         reservations:
@@ -60,7 +61,7 @@ services:
         ros2 launch focalformer3d_detector focalformer3d_detector_launch.py \
           use_sim_time:=true \
           input_topic:=/lidar_01/point_cloud \
-          output_topic:=/object_list/prediction
+          output_topic:=/object_list/detected
     deploy:
       resources:
         reservations:
@@ -68,3 +69,24 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+
+  autoware_multi_object_tracker:
+    profiles:
+      - autoware_multi_object_tracker
+    depends_on:
+      - autonomy_datasets
+    image: ghcr.io/thinking-cars/autoware_multi_object_tracker:latest_benchmark_ci
+    environment:
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+      INPUT_DETECTION01_OBJECTS: /object_list/detected
+      INPUT_DETECTION01_CHANNEL: detected_objects
+      OUTPUT_OBJECTS: /object_list/tracked
+    command:
+      - /bin/bash
+      - -ic
+      - |
+        ros2 launch autoware_multi_object_tracker multi_object_tracker.launch.xml \
+          use_sim_time:=true \
+          input/detection01/objects:=$${INPUT_DETECTION01_OBJECTS} \
+          input/detection01/channel:=$${INPUT_DETECTION01_CHANNEL} \
+          output/objects:=$${OUTPUT_OBJECTS}

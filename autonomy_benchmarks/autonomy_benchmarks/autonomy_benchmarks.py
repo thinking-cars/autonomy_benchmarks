@@ -141,6 +141,12 @@ class AutonomyBenchmarks(Node):
             )
 
             benchmark_handler = NuscenesLidarObjectDetection()
+        elif self.benchmark == "nuscenes_object_tracking":
+            from autonomy_benchmarks.benchmarks.object_tracking.NuscenesObjectTracking import (
+                NuscenesObjectTracking,
+            )
+
+            benchmark_handler = NuscenesObjectTracking()
         else:
             self.get_logger().fatal(f"Benchmark '{self.benchmark}' not recognized, exiting")
             raise SystemExit(1)
