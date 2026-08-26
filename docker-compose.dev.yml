@@ -6,7 +6,7 @@ services:
     extends:
       file: docker-compose.yml
       service: autonomy_benchmarks
-    image: ghcr.io/thinking-cars/autonomy_benchmarks-internal:latest-dev
+    image: ghcr.io/thinking-cars/autonomy_benchmarks:latest-dev
     command: sleep infinity
     volumes:
       - .:/docker-ros/ws/src/target

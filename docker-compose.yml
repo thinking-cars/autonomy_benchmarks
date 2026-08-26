@@ -3,13 +3,13 @@ name: ${USER}-autonomy-benchmarks
 services:
 
   autonomy_benchmarks:
-    image: ghcr.io/thinking-cars/autonomy_benchmarks-internal:latest
+    image: ghcr.io/thinking-cars/autonomy_benchmarks:latest
     command: ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py benchmark:=nuscenes_lidar_object_detection prediction:=/object_list/prediction label:=/object_list/lidar_01
     environment:
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp
 
   autonomy_datasets:
-    image: ghcr.io/thinking-cars/autonomy_datasets:latest_benchmark_ci
+    image: ghcr.io/thinking-cars/autonomy_datasets:latest
     command: ros2 launch autonomy_datasets autonomy_datasets.launch.py dataset:=nuscenes
     environment:
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp
@@ -33,7 +33,7 @@ services:
       - centerpoint
     depends_on:
       - autonomy_datasets
-    image: ghcr.io/thinking-cars/autoware_lidar_centerpoint:latest_benchmark_ci
+    image: ghcr.io/thinking-cars/autoware_lidar_centerpoint:latest
     environment:
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp
     command: ros2 launch autoware_lidar_centerpoint lidar_centerpoint.launch.xml model_name:=centerpoint input/pointcloud:=/lidar_01/point_cloud output/objects:=/object_list/prediction use_sim_time:=true
@@ -50,7 +50,7 @@ services:
       - focalformer3d
     depends_on:
       - autonomy_datasets
-    image: ghcr.io/thinking-cars/focalformer3d_detector:latest_benchmark_ci
+    image: ghcr.io/thinking-cars/focalformer3d_detector:latest
     environment:
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp
     command:
