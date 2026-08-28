@@ -4,15 +4,20 @@ services:
 
   autonomy_benchmarks:
     image: ghcr.io/thinking-cars/autonomy_benchmarks:latest
-    command: ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py benchmark:=nuscenes_lidar_object_detection prediction:=/object_list/prediction label:=/object_list/lidar_01
+    command: |
+      ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py \
+        benchmark:=nuscenes_lidar_object_detection \
+        prediction:=/object_list/prediction \
+        label:=/object_list/lidar_01 \
+        label_meta_info:=/object_list/lidar_01/meta_info
     environment:
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp
 
   autonomy_datasets:
     image: ghcr.io/thinking-cars/autonomy_datasets:latest
     command: |
-      ros2 launch autonomy_datasets autonomy_datasets.launch.py
-        dataset:=nuscenes
+      ros2 launch autonomy_datasets autonomy_datasets.launch.py \
+        dataset:=nuscenes \
         wait_for_ack:=true
     environment:
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp
