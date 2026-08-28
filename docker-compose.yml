@@ -15,6 +15,7 @@ services:
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp
       DISPLAY: ${DISPLAY:-""}
     volumes:
+      - ./config/params_nuscenes.yml:/docker-ros/ws/install/autonomy_datasets/share/autonomy_datasets/config/params_nuscenes.yml
       - ./conf.rviz:/docker-ros/ws/install/autonomy_datasets/share/autonomy_datasets/config/config.rviz
       - $DATASET_DIR:/datasets
       - /tmp/.X11-unix:/tmp/.X11-unix
