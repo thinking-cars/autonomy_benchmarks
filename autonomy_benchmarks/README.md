@@ -23,6 +23,3 @@ Benchmarking suite for automated driving tasks
 | `namespace` | `""` | node namespace |
 | `log_level` | `"info"` | ros logging level |
 | `use_sim_time` | `"true"` | use sim time |
-| `prediction` | `"~/prediction"` | `perception_msgs/ObjectList` topic with the predicted objects |
-| `label` | `"~/label"` | `perception_msgs/ObjectList` topic with the ground-truth objects |
-| `label_meta_info` | `"~/label_meta_info"` | `autonomy_datasets_msgs/ObjectListMetaInfo` topic with the dataset annotations of the ground-truth objects, published by the dataset on `<label topic>/meta_info` |
