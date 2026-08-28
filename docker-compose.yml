@@ -10,7 +10,10 @@ services:
 
   autonomy_datasets:
     image: ghcr.io/thinking-cars/autonomy_datasets:latest
-    command: ros2 launch autonomy_datasets autonomy_datasets.launch.py dataset:=nuscenes
+    command: |
+      ros2 launch autonomy_datasets autonomy_datasets.launch.py
+        dataset:=nuscenes
+        wait_for_ack:=true
     environment:
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp
       DISPLAY: ${DISPLAY:-""}
