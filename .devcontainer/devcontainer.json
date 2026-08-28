@@ -14,11 +14,6 @@
   // mount VS Code workspace to docker-ros workspace
   "workspaceFolder": "/docker-ros/ws/src/target",
 
-  // mount volumes into devcontainer
-  "mounts": [
-    "source=${localEnv:HOME}/.claude,target=/home/dockeruser/.claude,type=bind"
-  ],
-
   // https://containers.dev/features
   "features": {},
 

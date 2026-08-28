@@ -10,6 +10,7 @@ services:
     command: sleep infinity
     volumes:
       - .:/docker-ros/ws/src/target
+      - ${HOME}/.claude:/root/.claude
 
   autoware_lidar_centerpoint:
     extends:
