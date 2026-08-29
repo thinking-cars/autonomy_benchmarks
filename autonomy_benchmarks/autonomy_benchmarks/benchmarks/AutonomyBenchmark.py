@@ -184,7 +184,7 @@ class AutonomyBenchmark(ABC):
                 }
                 for scene_id, entries in scenes.items()
             },
-            "sample_results": self._sample_results,
+            # "sample_results": self._sample_results,
         }
 
     def save_results(self, output_path: str, results: Optional[Dict[str, Any]] = None) -> str:
