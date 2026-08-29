@@ -1,3 +1,6 @@
 [submodule ".openads-dev-environment"]
 	path = .openads-dev-environment
 	url = https://github.com/openads-project/openads-dev-environment.git
+[submodule "docker/docker-ros"]
+	path = docker/docker-ros
+	url = https://github.com/ika-rwth-aachen/docker-ros.git
