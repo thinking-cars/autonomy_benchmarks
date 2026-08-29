@@ -347,7 +347,7 @@ class AutonomyBenchmarks(Node):
             request.mode = RequestSamples.Request.MODE_ALL_SAMPLES
             requested_samples = "all remaining samples"
 
-        self.get_logger().info(f"Requesting {requested_samples} of the dataset for evaluation")
+        self.get_logger().debug(f"Requesting {requested_samples} of the dataset for evaluation")
         self.pending_request = self.sample_request_client.call_async(request)
         self.pending_request.add_done_callback(self.samples_published_callback)
 
@@ -373,7 +373,7 @@ class AutonomyBenchmarks(Node):
 
         published_samples = ", ".join(str(sample_id) for sample_id in published_sample_ids)
         if response.success:
-            self.get_logger().info(f"Dataset published sample(s) {published_samples}: {response.message}")
+            self.get_logger().debug(f"Dataset published sample(s) {published_samples}: {response.message}")
         else:
             self.get_logger().warn(f"Dataset did not publish all requested samples: {response.message}")
 
@@ -419,7 +419,7 @@ class AutonomyBenchmarks(Node):
         aggregated_metrics = json.dumps(results["aggregated_metrics"], indent=2, default=str)
         self.get_logger().info(
             f"Benchmark '{self.benchmark}' finished after {results['num_samples']} evaluated sample(s) "
-            f"of {results['num_scenes']} scene(s), aggregated dataset metrics:\n{aggregated_metrics}"
+            f"of {results['num_scenes']} scene(s)."
         )
 
         if self.results_path:
@@ -428,6 +428,8 @@ class AutonomyBenchmarks(Node):
                 self.get_logger().info(f"Wrote benchmark results to '{results_path}'")
             except OSError as exception:
                 self.get_logger().error(f"Failed to write benchmark results to '{self.results_path}': {exception}")
+        else:
+            self.get_logger().info(f"Aggregated dataset metrics:\n{aggregated_metrics}")
 
     def evaluate_sample(self, *args):
         """Callback to evaluate a single sample when all required input messages have been received.
@@ -444,7 +446,7 @@ class AutonomyBenchmarks(Node):
         dataset recorded them with, and are attributed to the scene the dataset reported for them,
         which can arrive after the sample has been evaluated.
         """
-        self.get_logger().info("Received synchronized input messages, evaluating sample...")
+        self.get_logger().debug("Received synchronized input messages, evaluating sample...")
 
         if len(args) != len(self.input_topics):
             self.get_logger().error(f"Expected {len(self.input_topics)} messages but received {len(args)}; skipping sample.")
@@ -453,13 +455,11 @@ class AutonomyBenchmarks(Node):
         # Map each synchronized message to its required-input name (which matches
         # the compute_sample_metrics parameter names).
         messages = dict(zip(self.input_topics, args))
-        counts = {name: len(msg.objects) for name, msg in messages.items()}
-        self.get_logger().info(f"Object counts per input: {counts}")
 
         # Use the ROS header stamp of the first message as sample ID.
         stamp = args[0].header.stamp
         sample_id = f"{stamp.sec}.{stamp.nanosec:09d}"
-        self.get_logger().info(f"Sample ID: '{sample_id}'")
+        self.get_logger().debug(f"Sample ID: '{sample_id}'")
 
         result = self.benchmark_handler.record_sample(sample_id=sample_id, **messages)
         self.num_evaluated_samples += 1
@@ -472,7 +472,8 @@ class AutonomyBenchmarks(Node):
         # a system under test that needs longer for some samples must not run into the timeout,
         # which therefore restarts with every evaluated sample
         self.evaluation_deadline = time.monotonic() + self.evaluation_timeout
-        self.get_logger().info(f"Sample '{sample_id}' result: {result}")
+        if not self.results_path:
+            self.get_logger().debug(f"Sample '{sample_id}' result: {result}")
 
         # publish the sample's matching outcome for inspection in RViz
         if self.visualization_publishers:
