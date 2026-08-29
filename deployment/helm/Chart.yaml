@@ -1,0 +1,9 @@
+apiVersion: v2
+name: autonomy-benchmarks
+version: 1.0.0
+appVersion: 1.0.0
+description: Benchmarking suite for automated driving tasks
+dependencies:
+  - repository: oci://ghcr.io/openads-project/openads-helm
+    name: openadservice
+    version: 1.0.0

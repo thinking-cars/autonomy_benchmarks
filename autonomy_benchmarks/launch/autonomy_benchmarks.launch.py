@@ -13,7 +13,7 @@ from launch_ros.actions import Node, SetParameter
 # parameter). This single list is the source of truth: it drives both the
 # per-input launch arguments and the topic remappings below, so adding a new
 # input (e.g. "map", "radar") is a one-line change here.
-_INPUTS = ["prediction", "label"]
+_INPUTS = ["prediction", "label", "label_meta_info"]
 
 
 def generate_launch_description():

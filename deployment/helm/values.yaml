@@ -1,0 +1,21 @@
+openadservice:
+  name: autonomy-benchmarks
+  image: ghcr.io/thinking-cars/autonomy_benchmarks:v1.0.0
+  env:
+    # --- name ------
+    NAMESPACE: /
+    NAME: autonomy_benchmarks
+    # --- other -----
+    LOG_LEVEL: info
+    USE_SIM_TIME: true
+    BENCHMARK: nuscenes_lidar_object_detection
+  args:
+  - /bin/bash
+  - -ic
+  - |
+    ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py \
+      namespace:=${NAMESPACE} \
+      name:=${NAME} \
+      log_level:=${LOG_LEVEL} \
+      use_sim_time:=${USE_SIM_TIME} \
+      benchmark:=${BENCHMARK}

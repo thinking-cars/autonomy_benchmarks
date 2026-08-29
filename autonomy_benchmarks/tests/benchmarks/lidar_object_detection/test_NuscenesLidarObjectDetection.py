@@ -6,24 +6,34 @@
 Tests focus on public API methods: compute_sample_metrics(),
 compute_aggregated_metrics(), and benchmark configuration.
 
-Inputs are real ``perception_msgs`` messages (built via the helpers below),
-matching how ``_extract_objects`` reads them: geometry through the
-``perception_msgs_utils`` state getters (which require a real ``ObjectState``
-with a valid ``model_id``), the prediction class from the perception
-``ObjectClassification`` enum, and the label class from the ``original_class``
-``meta_info`` entry.
+Inputs are real ROS messages (built via the helpers below), matching how
+``_extract_objects`` reads them: geometry through the ``perception_msgs_utils``
+state getters (which require a real ``ObjectState`` with a valid ``model_id``),
+the prediction class from the perception ``ObjectClassification`` enum, and the
+label class from the ``original_class`` annotation of the accompanying
+``autonomy_datasets_msgs/ObjectListMetaInfo`` message, which the dataset
+publishes on ``<label topic>/meta_info`` and which is correlated with the
+``ObjectList`` by object ID.
 """
 
 from __future__ import annotations
+
+from typing import List, Optional, Tuple
 
 import pytest
 from autonomy_benchmarks.benchmarks.lidar_object_detection.NuscenesLidarObjectDetection import (
     NuscenesLidarObjectDetection,
 )
+from autonomy_datasets_msgs.msg import ObjectListMetaInfo, ObjectMetaInfo
+from diagnostic_msgs.msg import KeyValue
 from perception_msgs.msg import HEXAMOTION, Object, ObjectClassification, ObjectList, ObjectState
 
 # Full HEXAMOTION continuous-state length, so the getters' size sanity-check passes.
 _HEXAMOTION_STATE_SIZE = HEXAMOTION.CONTINUOUS_STATE_SIZE
+
+# A ground-truth object paired with its dataset annotations (``None`` when the
+# dataset publishes no meta information for it).
+GroundTruth = Tuple[Object, Optional[List[Tuple[str, str]]]]
 
 
 def _state(x, y, width, length, height, yaw, vel_lon, vel_lat, classifications) -> ObjectState:
@@ -55,16 +65,12 @@ def _pred(
     vel_lat=0.0,
     class_type=ObjectClassification.CAR,
     confidence=0.9,
-    attribute=None,
 ) -> Object:
     """Build a prediction ``Object``.
 
     Class comes from the perception enum and the score from
-    ``existence_probability``; ``attribute`` (optional) goes into ``meta_info``.
+    ``existence_probability``. Predictions carry no dataset meta information.
     """
-    meta = []
-    if attribute is not None:
-        meta.append(f"attribute:{attribute}")
     state = _state(
         x,
         y,
@@ -76,7 +82,7 @@ def _pred(
         vel_lat,
         [ObjectClassification(type=class_type, probability=confidence)],
     )
-    return Object(state=state, meta_info=meta, existence_probability=confidence)
+    return Object(state=state, existence_probability=confidence)
 
 
 def _gt(
@@ -93,28 +99,58 @@ def _gt(
     num_radar_pts=None,
     attribute=None,
     include_original_class=True,
-) -> Object:
-    """Build a ground-truth ``Object``.
+) -> GroundTruth:
+    """Build a ground-truth ``Object`` and its dataset annotations.
 
-    Class comes from the ``original_class`` ``meta_info`` entry; point counts
-    and attribute also come from ``meta_info``.
+    Class comes from the ``original_class`` annotation; point counts and
+    attribute are annotations too. The annotations are turned into an
+    ``ObjectMetaInfo`` entry by :func:`_label`; ``None`` means the object has no
+    meta info entry at all.
     """
-    meta = []
+    object_annotations: List[Tuple[str, str]] = []
     if include_original_class:
-        meta.append(f"original_class:{original_class}")
+        object_annotations.append(("original_class", original_class))
     if attribute is not None:
-        meta.append(f"attribute:{attribute}")
+        object_annotations.append(("attribute", attribute))
     if num_lidar_pts is not None:
-        meta.append(f"num_lidar_pts:{num_lidar_pts}")
+        object_annotations.append(("num_lidar_pts", str(num_lidar_pts)))
     if num_radar_pts is not None:
-        meta.append(f"num_radar_pts:{num_radar_pts}")
+        object_annotations.append(("num_radar_pts", str(num_radar_pts)))
     state = _state(x, y, width, length, height, yaw, vel_lon, vel_lat, [])
-    return Object(state=state, meta_info=meta, existence_probability=1.0)
+    return Object(state=state, existence_probability=1.0), object_annotations or None
 
 
 def _msg(objs) -> ObjectList:
     """Wrap objects in a ``perception_msgs/ObjectList`` message."""
     return ObjectList(objects=objs)
+
+
+def _label(gts: List[GroundTruth], reverse_meta: bool = False) -> Tuple[ObjectList, ObjectListMetaInfo]:
+    """Split ``_gt`` pairs into the label and label meta info messages.
+
+    Object IDs are assigned per frame and are what correlates both messages;
+    objects without annotations get no ``ObjectMetaInfo`` entry, as published by
+    the dataset.
+
+    Args:
+        gts: ``(object, annotations)`` pairs as returned by :func:`_gt`.
+        reverse_meta: Publish the meta info entries in the reverse order of the
+            objects, to prove the correlation is by ID and not by position.
+
+    Returns:
+        The ``(ObjectList, ObjectListMetaInfo)`` pair for the frame.
+    """
+    objects: List[Object] = []
+    meta_entries: List[ObjectMetaInfo] = []
+    for object_id, (obj, object_annotations) in enumerate(gts):
+        obj.id = object_id
+        objects.append(obj)
+        if object_annotations:
+            info = [KeyValue(key=key, value=value) for key, value in object_annotations]
+            meta_entries.append(ObjectMetaInfo(id=object_id, info=info))
+    if reverse_meta:
+        meta_entries.reverse()
+    return ObjectList(objects=objects), ObjectListMetaInfo(objects=meta_entries)
 
 
 class TestNuscenesLidarObjectDetection:
@@ -128,9 +164,18 @@ class TestNuscenesLidarObjectDetection:
         """Create a fresh benchmark instance for each test."""
         self.bm = NuscenesLidarObjectDetection()
 
+    def _metrics(self, pred_objs, gts, reverse_meta: bool = False) -> dict:
+        """Compute sample metrics from prediction objects and ``_gt`` pairs.
+
+        Mirrors the node's synchronized callback, which hands the benchmark the
+        label object list and its meta info message together.
+        """
+        label, label_meta_info = _label(gts, reverse_meta=reverse_meta)
+        return self.bm.compute_sample_metrics(_msg(pred_objs), label, label_meta_info=label_meta_info)
+
     def test_empty_inputs(self):
         """Verify empty inputs produce valid match records for all thresholds."""
-        result = self.bm.compute_sample_metrics(_msg([]), _msg([]))
+        result = self._metrics([], [])
         assert result["sample_prediction_num"] == 0
         assert result["sample_ground_truth_num"] == 0
         for thr in [0.5, 1.0, 2.0, 4.0]:
@@ -142,25 +187,22 @@ class TestNuscenesLidarObjectDetection:
 
         Cars beyond 50m should be excluded from matching.
         """
-        pred = _msg([_pred(x=51.0, y=0.0, confidence=0.9)])
-        gt = _msg([_gt(x=51.0, y=0.0, original_class="vehicle.car", num_lidar_pts=5)])
-        result = self.bm.compute_sample_metrics(pred, gt)
+        result = self._metrics(
+            [_pred(x=51.0, y=0.0, confidence=0.9)],
+            [_gt(x=51.0, y=0.0, original_class="vehicle.car", num_lidar_pts=5)],
+        )
         for thr, class_records in result["match_records"].items():
             assert "car" not in class_records
 
     def test_basic_matching_produces_tp(self):
         """Verify identical boxes produce true positives at tight threshold."""
-        pred = _msg([_pred(x=0.0, y=0.0, confidence=0.9)])
-        gt = _msg([_gt(x=0.0, y=0.0, num_lidar_pts=5)])
-        result = self.bm.compute_sample_metrics(pred, gt)
+        result = self._metrics([_pred(x=0.0, y=0.0, confidence=0.9)], [_gt(x=0.0, y=0.0, num_lidar_pts=5)])
         entry = result["match_records"][0.5]["car"]["pred_entries"][0]
         assert entry["is_tp"] is True
 
     def test_distant_pred_is_fp_at_tight_threshold(self):
         """Verify distant predictions are false positives at tight thresholds."""
-        pred = _msg([_pred(x=10.0, y=0.0, confidence=0.9)])
-        gt = _msg([_gt(x=0.0, y=0.0, num_lidar_pts=5)])
-        result = self.bm.compute_sample_metrics(pred, gt)
+        result = self._metrics([_pred(x=10.0, y=0.0, confidence=0.9)], [_gt(x=0.0, y=0.0, num_lidar_pts=5)])
         entries_05 = result["match_records"][0.5]["car"]["pred_entries"]
         assert entries_05[0]["is_tp"] is False
 
@@ -170,67 +212,89 @@ class TestNuscenesLidarObjectDetection:
         (Predictions can never be bike-rack: the perception enum has no such
         class, so only the GT stream can carry one.)
         """
-        pred = _msg([_pred(x=0.0, y=0.0, confidence=0.9)])
-        gt = _msg(
+        result = self._metrics(
+            [_pred(x=0.0, y=0.0, confidence=0.9)],
             [
                 _gt(x=0.0, y=0.0, original_class="vehicle.car", num_lidar_pts=5),
                 _gt(x=20.0, y=0.0, original_class="static_object.bicycle_rack", num_lidar_pts=5),
-            ]
+            ],
         )
-        result = self.bm.compute_sample_metrics(pred, gt)
         for threshold_records in result["match_records"].values():
             assert self.bm.bike_rack_class_name not in threshold_records
 
-    def _make_sample_result(self, pred_objs, gt_objs):
+    def _make_sample_result(self, pred_objs, gts):
         """Wrap sample metrics in the expected result structure."""
-        metrics = self.bm.compute_sample_metrics(_msg(pred_objs), _msg(gt_objs))
-        return {"metrics": metrics}
+        return {"metrics": self._metrics(pred_objs, gts)}
 
-    # --- perception_msgs extraction, exercised through the public API ---
+    # --- message extraction, exercised through the public API ---
 
     def test_label_class_name_comes_from_original_class_meta(self):
-        """A label's class_name is read from meta_info 'original_class'."""
-        gt = _msg([_gt(x=0.0, original_class="barrier", num_lidar_pts=5)])
-        result = self.bm.compute_sample_metrics(_msg([]), gt)
+        """A label's class_name is read from the 'original_class' annotation."""
+        result = self._metrics([], [_gt(x=0.0, original_class="barrier", num_lidar_pts=5)])
         assert "barrier" in result["match_records"][0.5]
         assert "car" not in result["match_records"][0.5]
 
     def test_label_missing_original_class_raises(self):
-        """A label object without 'original_class' in meta_info raises ValueError."""
+        """A label object without an 'original_class' annotation raises ValueError."""
         with pytest.raises(ValueError):
-            self.bm.compute_sample_metrics(_msg([]), _msg([_gt(include_original_class=False)]))
+            self._metrics([], [_gt(include_original_class=False)])
+
+    def test_label_without_meta_info_entry_raises(self):
+        """A label object with no meta info entry at all raises ValueError."""
+        label = _msg([_gt(x=0.0, num_lidar_pts=5)[0]])
+        with pytest.raises(ValueError):
+            self.bm.compute_sample_metrics(_msg([]), label, label_meta_info=ObjectListMetaInfo())
+
+    def test_meta_info_is_correlated_by_object_id(self):
+        """Annotations are matched to objects by ID, not by list position.
+
+        The meta info entries are published in reverse order. The car sits at
+        45 m, inside the 50 m car range but beyond the 40 m pedestrian range, so
+        swapping the two annotations would drop it from the match records.
+        """
+        gts = [
+            _gt(x=45.0, original_class="vehicle.car", num_lidar_pts=5),
+            _gt(x=0.0, original_class="human.pedestrian.adult", num_lidar_pts=5),
+        ]
+        result = self._metrics([], gts, reverse_meta=True)
+        assert result["sample_ground_truth_num"] == 2
+        assert set(result["match_records"][0.5]) == {"car", "pedestrian"}
 
     def test_prediction_class_comes_from_perception_enum(self):
         """A prediction's class_name is derived from the perception classification enum."""
-        pred = _msg([_pred(x=0.0, class_type=ObjectClassification.PEDESTRIAN, confidence=0.9)])
-        gt = _msg([_gt(x=0.0, original_class="human.pedestrian.adult", num_lidar_pts=5)])
-        result = self.bm.compute_sample_metrics(pred, gt)
+        result = self._metrics(
+            [_pred(x=0.0, class_type=ObjectClassification.PEDESTRIAN, confidence=0.9)],
+            [_gt(x=0.0, original_class="human.pedestrian.adult", num_lidar_pts=5)],
+        )
         entry = result["match_records"][0.5]["pedestrian"]["pred_entries"][0]
         assert entry["is_tp"] is True
 
     def test_prediction_unmapped_enum_is_dropped(self):
         """A prediction whose perception type has no class mapping is dropped, not raised."""
-        pred = _msg([_pred(x=0.0, class_type=ObjectClassification.ANIMAL, confidence=0.9)])
-        result = self.bm.compute_sample_metrics(pred, _msg([]))
+        result = self._metrics([_pred(x=0.0, class_type=ObjectClassification.ANIMAL, confidence=0.9)], [])
         assert result["sample_prediction_num"] == 0
 
-    def test_prediction_attribute_is_extracted_for_aae(self):
-        """The prediction's attribute is read from meta_info and drives AAE."""
-        # Matching attributes -> AAE 0.0; mismatched -> AAE 1.0.
-        pred = _msg([_pred(x=0.0, class_type=ObjectClassification.CAR, attribute="vehicle.moving")])
-        gt = _msg([_gt(x=0.0, original_class="vehicle.car", num_lidar_pts=5, attribute="vehicle.moving")])
-        res = self.bm.compute_sample_metrics(pred, gt)
-        assert res["match_records"][0.5]["car"]["pred_entries"][0]["aae"] == 0.0
+    def test_gt_attribute_is_extracted_for_aae(self):
+        """The GT attribute comes from the meta info topic and drives AAE.
 
-        pred = _msg([_pred(x=0.0, class_type=ObjectClassification.CAR, attribute="vehicle.stopped")])
-        res = self.bm.compute_sample_metrics(pred, gt)
-        assert res["match_records"][0.5]["car"]["pred_entries"][0]["aae"] == 1.0
+        Predictions carry no attribute (``perception_msgs`` cannot express one
+        and detectors publish no meta info topic), so an annotated GT attribute
+        always counts as a mismatch, while a GT without attribute leaves the TP
+        out of the AAE average.
+        """
+        preds = [_pred(x=0.0, class_type=ObjectClassification.CAR)]
+        result = self._metrics(preds, [_gt(x=0.0, original_class="vehicle.car", num_lidar_pts=5, attribute="vehicle.moving")])
+        assert result["match_records"][0.5]["car"]["pred_entries"][0]["aae"] == 1.0
+
+        result = self._metrics(preds, [_gt(x=0.0, original_class="vehicle.car", num_lidar_pts=5)])
+        assert result["match_records"][0.5]["car"]["pred_entries"][0]["aae"] is None
 
     def test_gt_point_filter_active_through_extraction(self):
-        """A GT box with 0 lidar and 0 radar points (from meta_info) is excluded."""
-        pred = _msg([_pred(x=0.0, confidence=0.9)])
-        gt = _msg([_gt(x=0.0, original_class="vehicle.car", num_lidar_pts=0, num_radar_pts=0)])
-        result = self.bm.compute_sample_metrics(pred, gt)
+        """A GT box with 0 lidar and 0 radar points (from the meta info) is excluded."""
+        result = self._metrics(
+            [_pred(x=0.0, confidence=0.9)],
+            [_gt(x=0.0, original_class="vehicle.car", num_lidar_pts=0, num_radar_pts=0)],
+        )
         # The zero-point GT is filtered out, so its class has no GT to match.
         for class_records in result["match_records"].values():
             gt_count = class_records.get("car", {}).get("gt_count", 0)
@@ -238,16 +302,18 @@ class TestNuscenesLidarObjectDetection:
 
     def test_gt_with_points_survives_filter(self):
         """A GT box with lidar points is retained by the point filter."""
-        pred = _msg([_pred(x=0.0, confidence=0.9)])
-        gt = _msg([_gt(x=0.0, original_class="vehicle.car", num_lidar_pts=5, num_radar_pts=0)])
-        result = self.bm.compute_sample_metrics(pred, gt)
+        result = self._metrics(
+            [_pred(x=0.0, confidence=0.9)],
+            [_gt(x=0.0, original_class="vehicle.car", num_lidar_pts=5, num_radar_pts=0)],
+        )
         assert result["match_records"][0.5]["car"]["gt_count"] == 1
 
     def test_full_nuscenes_category_is_normalised_to_detection_class(self):
         """A GT label's full nuScenes category (e.g. 'vehicle.car') routes to 'car'."""
-        pred = _msg([_pred(x=0.0, y=0.0, class_type=ObjectClassification.CAR, confidence=0.9)])
-        gt = _msg([_gt(x=0.0, y=0.0, original_class="vehicle.car", num_lidar_pts=5)])
-        result = self.bm.compute_sample_metrics(pred, gt)
+        result = self._metrics(
+            [_pred(x=0.0, y=0.0, class_type=ObjectClassification.CAR, confidence=0.9)],
+            [_gt(x=0.0, y=0.0, original_class="vehicle.car", num_lidar_pts=5)],
+        )
         assert result["sample_ground_truth_num"] == 1
         # The full-category GT lands in the same 'car' bucket as the prediction.
         entry = result["match_records"][0.5]["car"]["pred_entries"][0]
@@ -255,14 +321,14 @@ class TestNuscenesLidarObjectDetection:
 
     def test_ignore_category_objects_are_dropped(self):
         """Objects in non-evaluated nuScenes categories are dropped, not raised."""
-        gt = _msg(
+        result = self._metrics(
+            [],
             [
                 _gt(x=0.0, original_class="vehicle.car", num_lidar_pts=5),
                 _gt(x=1.0, original_class="movable_object.debris", num_lidar_pts=5),
                 _gt(x=2.0, original_class="animal", num_lidar_pts=5),
-            ]
+            ],
         )
-        result = self.bm.compute_sample_metrics(_msg([]), gt)
         # Only the car survives; the two ignore-category objects are dropped.
         assert result["sample_ground_truth_num"] == 1
 
@@ -270,7 +336,7 @@ class TestNuscenesLidarObjectDetection:
         """'static_object.bicycle_rack' is retained as the bike_rack class."""
         rack = _gt(x=0.0, y=0.0, width=4.0, length=4.0, original_class="static_object.bicycle_rack", num_lidar_pts=5)
         bike = _gt(x=0.0, y=0.0, original_class="vehicle.bicycle", num_lidar_pts=5)
-        result = self.bm.compute_sample_metrics(_msg([]), _msg([rack, bike]))
+        result = self._metrics([], [rack, bike])
         # The bicycle falls inside the rack and is filtered out by bike-rack logic.
         for threshold_records in result["match_records"].values():
             assert "bicycle" not in threshold_records
@@ -278,7 +344,7 @@ class TestNuscenesLidarObjectDetection:
     def test_unrecognised_label_category_raises(self):
         """An unknown label original_class value raises ValueError."""
         with pytest.raises(ValueError):
-            self.bm.compute_sample_metrics(_msg([]), _msg([_gt(original_class="totally.made.up")]))
+            self._metrics([], [_gt(original_class="totally.made.up")])
 
     def test_perfect_matching_yields_high_map(self):
         """Verify perfect matching produces high mean average precision."""

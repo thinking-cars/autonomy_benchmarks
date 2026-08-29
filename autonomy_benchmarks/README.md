@@ -2,6 +2,16 @@
 
 Benchmarking suite for automated driving tasks
 
+## Nodes
+
+### `autonomy_benchmarks`
+
+#### Parameters
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `benchmark` | `string` | `nuscenes_lidar_object_detection` | benchmark name |
+
 ## Launch Files
 
 ### [`autonomy_benchmarks.launch.py`](launch/autonomy_benchmarks.launch.py)

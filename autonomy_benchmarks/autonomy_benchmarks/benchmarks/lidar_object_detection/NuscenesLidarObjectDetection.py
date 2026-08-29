@@ -13,6 +13,14 @@ Each record carries the fields the metrics consume: ``x``, ``y``, ``width``,
 ``confidence_score``, ``attribute``, ``number_of_lidar_points``, and
 ``number_of_radar_points``.
 
+The dataset annotations that ``perception_msgs/Object`` cannot express
+(``original_class``, ``attribute``, ``num_lidar_pts``, ``num_radar_pts``) are
+published by ``autonomy_datasets`` on a separate
+``<object list topic>/meta_info`` topic as an
+``autonomy_datasets_msgs/ObjectListMetaInfo``. It is a synchronized input of its
+own (``label_meta_info``) and is correlated with the object list via the header
+stamp and the object ID.
+
 Key evaluation settings:
 
 - Matching:   BEV center-point Euclidean distance ≤ threshold.
@@ -28,9 +36,10 @@ Key evaluation settings:
 - TP metrics: ATE, ASE, AOE, AVE, AAE measured at the 2.0 m threshold.
               AOE for traffic_cone is ignored (set to 0); for barrier
               it is capped at π (180°). AVE and AAE for barrier/traffic_cone
-              are ignored (set to 0 / not evaluated). AAE requires the
-              ``attribute`` field to be populated by the dataset loader;
-              when attribute data is absent, AAE is skipped per TP entry.
+              are ignored (set to 0 / not evaluated). AAE requires an
+              ``attribute`` annotation on the label meta info topic; when it
+              is absent, AAE is skipped per TP entry. Predictions have no meta
+              info topic, so an annotated GT attribute counts as a mismatch.
 - NDS:        nuScenes Detection Score combining mAP, mATE, mASE, mAOE,
               mAVE, mAAE with weights 5-1-1-1-1-1, normalised by 10.
 """
@@ -43,6 +52,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 from autonomy_benchmarks.benchmarks.AutonomyBenchmark import AutonomyBenchmark
 from autonomy_benchmarks.utils.ObjectDetectionUtils import ObjectDetectionUtils
+from autonomy_datasets_msgs.msg import ObjectListMetaInfo
 from perception_msgs.msg import ObjectClassification, ObjectList
 from perception_msgs_utils.state_getters import (
     get_height,
@@ -59,6 +69,39 @@ from shapely.geometry import box as shapely_box
 from shapely.geometry import Point
 
 _CLASS_IGNORE = "__ignore__"
+
+
+def _annotation(annotations: Dict[str, List[str]], key: str) -> Optional[str]:
+    """Return the first value annotated under ``key``, or ``None`` if absent.
+
+    Args:
+        annotations: One object's key-to-values meta information.
+        key: Annotation key to look up.
+
+    Returns:
+        The first value published for ``key``, else ``None``.
+    """
+
+    values = annotations.get(key)
+    return values[0] if values else None
+
+
+def _annotation_int(annotations: Dict[str, List[str]], key: str) -> Optional[int]:
+    """Return the first value annotated under ``key`` as ``int``, or ``None`` if absent.
+
+    Args:
+        annotations: One object's key-to-values meta information.
+        key: Annotation key to look up.
+
+    Returns:
+        The first value published for ``key`` parsed as ``int``, else ``None``.
+
+    Raises:
+        ValueError: The annotated value is not a valid integer.
+    """
+
+    value = _annotation(annotations, key)
+    return None if value is None else int(value)
 
 
 class DetectionClass:
@@ -209,6 +252,9 @@ class NuscenesLidarObjectDetection(AutonomyBenchmark):
     def required_inputs(self) -> Dict[str, Any]:
         """Define expected input ROS message types.
 
+        ``label_meta_info`` carries the dataset annotations of the ``label``
+        object list (``original_class``, ``attribute``, point counts).
+
         Returns:
             Input name to ROS message type. The keys match the
             ``compute_sample_metrics`` parameters and are remapped to real ROS
@@ -218,23 +264,52 @@ class NuscenesLidarObjectDetection(AutonomyBenchmark):
         return {
             "prediction": ObjectList,
             "label": ObjectList,
+            "label_meta_info": ObjectListMetaInfo,
         }
 
-    def _extract_objects(self, objects: Any, is_label: bool = False) -> List[Dict[str, Any]]:
+    @staticmethod
+    def _index_meta_info(meta_info: Any) -> Dict[int, Dict[str, List[str]]]:
+        """Index an ``ObjectListMetaInfo`` message by object ID.
+
+        Args:
+            meta_info: An ``autonomy_datasets_msgs/ObjectListMetaInfo``, or
+                ``None`` when the frame carries no meta information.
+
+        Returns:
+            Object ID to that object's key-to-values annotations. A key may be
+            published more than once per object (e.g. several attributes), so
+            values are lists in publication order. Objects without any meta
+            information are absent from the index.
+        """
+
+        index: Dict[int, Dict[str, List[str]]] = {}
+        if meta_info is None:
+            return index
+        for entry in meta_info.objects:
+            annotations = index.setdefault(entry.id, {})
+            for key_value in entry.info:
+                annotations.setdefault(key_value.key, []).append(key_value.value)
+        return index
+
+    def _extract_objects(self, objects: Any, meta_info: Any = None, is_label: bool = False) -> List[Dict[str, Any]]:
         """Extract per-object metric records from a frame's ``ObjectList``.
 
         The ``class_name`` source depends on the role: ground-truth labels use
-        the dataset ``original_class`` meta_info entry normalised via
+        the dataset ``original_class`` annotation normalised via
         :data:`_NUSCENES_CATEGORY_TO_CLASS`; predictions use the perception
         classification enum via :data:`_PERCEPTION_TYPE_TO_CLASS`. Non-evaluated
         classes are dropped. Position, dimensions, yaw and velocity are read via
         each object's own motion model (selected by ``state.model_id``);
         ``confidence_score`` is the object's ``existence_probability``.
         ``attribute`` and the ``num_lidar_pts`` / ``num_radar_pts`` counts come
-        from ``meta_info`` (all optional).
+        from the object's meta information (all optional).
 
         Args:
             objects: A ``perception_msgs/ObjectList``.
+            meta_info: The matching ``autonomy_datasets_msgs/ObjectListMetaInfo``
+                published on ``<object list topic>/meta_info``, or ``None`` when
+                the object list has no meta information topic (e.g. model
+                predictions). Its entries are matched to objects by ID.
             is_label: ``True`` for ground-truth labels (class from
                 ``original_class``), ``False`` for predictions (class from the
                 perception enum).
@@ -250,8 +325,11 @@ class NuscenesLidarObjectDetection(AutonomyBenchmark):
                 known motion model (raised by the perception getters).
         """
 
+        meta_index = self._index_meta_info(meta_info)
+
         result: List[Dict[str, Any]] = []
         for obj in objects.objects:
+            annotations = meta_index.get(obj.id, {})
             yaw = get_yaw(obj)
             vel_lon = get_vel_lon(obj)
             vel_lat = get_vel_lat(obj)
@@ -261,15 +339,11 @@ class NuscenesLidarObjectDetection(AutonomyBenchmark):
             # Labels carry their class as the dataset ``original_class``;
             # predictions carry it in the perception classification enum.
             if is_label:
-                class_name: Optional[str] = None
-                for entry in obj.meta_info or []:
-                    if entry.startswith("original_class:"):
-                        raw = entry.split(":", 1)[1]
-                        # Categories fold to a class; detection names pass through.
-                        class_name = _NUSCENES_CATEGORY_TO_CLASS.get(raw, raw)
-                        break
-                if class_name is None:
-                    raise ValueError("'original_class' not found in meta_info")
+                raw = _annotation(annotations, "original_class")
+                if raw is None:
+                    raise ValueError(f"'original_class' not found in meta info of object {obj.id}")
+                # Categories fold to a class; detection names pass through.
+                class_name: Optional[str] = _NUSCENES_CATEGORY_TO_CLASS.get(raw, raw)
                 # Unknown categories pass through the map unchanged; reject them.
                 if class_name != _CLASS_IGNORE and class_name not in _DETECTION_CLASSES:
                     raise ValueError(f"Unrecognised original_class '{raw}'")
@@ -280,17 +354,10 @@ class NuscenesLidarObjectDetection(AutonomyBenchmark):
             if class_name == _CLASS_IGNORE:
                 continue  # not an evaluated class — drop
 
-            # Attribute and point counts from meta_info.
-            attribute: Optional[str] = None
-            num_lidar_points: Optional[int] = None
-            num_radar_points: Optional[int] = None
-            for entry in obj.meta_info or []:
-                if attribute is None and entry.startswith("attribute:"):
-                    attribute = entry[len("attribute:") :]
-                elif entry.startswith("num_lidar_pts:"):
-                    num_lidar_points = int(entry.split(":", 1)[1])
-                elif entry.startswith("num_radar_pts:"):
-                    num_radar_points = int(entry.split(":", 1)[1])
+            # Attribute and point counts from the dataset meta information.
+            attribute: Optional[str] = _annotation(annotations, "attribute")
+            num_lidar_points: Optional[int] = _annotation_int(annotations, "num_lidar_pts")
+            num_radar_points: Optional[int] = _annotation_int(annotations, "num_radar_pts")
 
             result.append(
                 {
@@ -316,6 +383,7 @@ class NuscenesLidarObjectDetection(AutonomyBenchmark):
         prediction: Any,
         label: Any,
         sample_id: Optional[str] = None,
+        label_meta_info: Any = None,
     ) -> Dict[str, Any]:
         """Pass 1 - match predictions to ground truth for one frame.
 
@@ -324,9 +392,12 @@ class NuscenesLidarObjectDetection(AutonomyBenchmark):
         (:meth:`_run_matching`).
 
         Args:
-            prediction: Predicted objects (raw ``ObjectList`` or records).
-            label: Ground-truth objects (raw ``ObjectList`` or records).
+            prediction: Predicted objects (``perception_msgs/ObjectList``).
+            label: Ground-truth objects (``perception_msgs/ObjectList``).
             sample_id: Optional frame identifier (unused).
+            label_meta_info: The dataset annotations of ``label``
+                (``autonomy_datasets_msgs/ObjectListMetaInfo``), received on
+                ``<label topic>/meta_info`` in the same synchronized callback.
 
         Returns:
             ``{"sample_prediction_num", "sample_ground_truth_num",
@@ -334,7 +405,7 @@ class NuscenesLidarObjectDetection(AutonomyBenchmark):
             ``match_records`` = ``threshold → class → {pred_entries, gt_count}``.
         """
         prediction = self._extract_objects(prediction, is_label=False)
-        label = self._extract_objects(label, is_label=True)
+        label = self._extract_objects(label, label_meta_info, is_label=True)
 
         sample_prediction_num = len(prediction)
         sample_ground_truth_num = len(label)

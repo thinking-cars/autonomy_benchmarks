@@ -21,8 +21,32 @@ jobs:
           target: dev,run
           base-image: rwthika/ros2:jazzy
           rmw-implementation: rmw_zenoh_cpp
-          command: ros2 launch ros2_demo_package ros2_demo_node_launch.py
-          enable-industrial-ci: true
+          command: ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py
           enable-slim: false
         env:
           TARGET_CMAKE_ARGS: -DCMAKE_EXPORT_COMPILE_COMMANDS=1
+      - name: Compute dev image ref
+        id: devimg
+        run: |
+          NAME="ghcr.io/${GITHUB_REPOSITORY,,}"
+          REF="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          SLUG="$(echo "$REF" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]\+/-/g; s/^-//; s/-$//')"
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            TAG="${GITHUB_REF_NAME}-dev"
+          elif [[ "$GITHUB_REF_NAME" == "${{ github.event.repository.default_branch }}" ]]; then
+            TAG="latest-dev"
+          else
+            TAG="latest-dev_${SLUG}_ci"
+          fi
+          echo "Using dev test image '${NAME}:${TAG}'"
+          echo "image=${NAME}:${TAG}" >> "$GITHUB_OUTPUT"
+      - name: Run tests
+        run: |
+          docker run --rm -u root:root \
+            "${{ steps.devimg.outputs.image }}" \
+            bash -ic '
+              PACKAGES=$(colcon list --base-paths /docker-ros/ws/src/target --names-only) &&
+              colcon build --symlink-install --packages-up-to $PACKAGES &&
+              colcon test --packages-select $PACKAGES
+              colcon test-result --verbose
+            '
