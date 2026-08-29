@@ -7,13 +7,20 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node, SetParameter
+from launch_ros.parameter_descriptions import ParameterValue
 
 # Names of the benchmark's data inputs. Each name must match a key returned by
 # the benchmark's ``required_inputs()`` (and thus a ``compute_sample_metrics``
 # parameter). This single list is the source of truth: it drives both the
 # per-input launch arguments and the topic remappings below, so adding a new
 # input (e.g. "map", "radar") is a one-line change here.
-_INPUTS = ["prediction", "label", "label_meta_info"]
+_INPUTS = ["prediction", "label"]
+
+# Inputs whose topic is derived from another input's topic instead of getting a
+# launch argument of its own, as ``input name -> (source input, topic suffix)``.
+# The dataset publishes the meta information of an object list next to it, on
+# "<object list topic>/meta_info".
+_DERIVED_INPUTS = {"label_meta_info": ("label", "/meta_info")}
 
 
 def generate_launch_description():
@@ -32,6 +39,12 @@ def generate_launch_description():
             "log_level", default_value="info", description="ROS logging level (debug, info, warn, error, fatal)"
         ),
         DeclareLaunchArgument("use_sim_time", default_value="true", description="use simulation clock"),
+        DeclareLaunchArgument(
+            "visualize",
+            default_value="false",
+            choices=["true", "false"],
+            description="publish the per-sample true positives, false positives and false negatives for RViz",
+        ),
         # One argument per benchmark input; defaults to the node-relative name so
         # an unset input is a no-op remap. Override with e.g. prediction:=/real/topic.
         *[
@@ -44,8 +57,10 @@ def generate_launch_description():
         ],
     ]
 
-    # Remap each node-relative input name onto the topic its argument resolves to.
+    # Remap each node-relative input name onto the topic its argument resolves to,
+    # then onto the topic derived from another input for the derived inputs.
     remappings = [(name, LaunchConfiguration(name)) for name in _INPUTS]
+    remappings += [(name, [LaunchConfiguration(source), suffix]) for name, (source, suffix) in _DERIVED_INPUTS.items()]
 
     node = Node(
         package="autonomy_benchmarks",
@@ -54,6 +69,7 @@ def generate_launch_description():
         name=LaunchConfiguration("name"),
         parameters=[
             {"benchmark": LaunchConfiguration("benchmark")},
+            {"visualize": ParameterValue(LaunchConfiguration("visualize"), value_type=bool)},
         ],
         arguments=["--ros-args", "--log-level", LaunchConfiguration("log_level")],
         remappings=remappings,

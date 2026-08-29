@@ -80,6 +80,34 @@ class AutonomyBenchmark(ABC):
         """
 
     # ------------------------------------------------------------------
+    # Optional visualization interface
+    # ------------------------------------------------------------------
+
+    def visualization_outputs(self) -> Dict[str, Any]:
+        """Define the ROS message types this benchmark publishes for visualization.
+
+        Returns
+        -------
+        A dictionary mapping output names to their ROS message types, empty for
+        a benchmark that offers no visualization.  The names are node-relative
+        topics and match the keys of :meth:`visualize_sample`.
+        """
+        return {}
+
+    def visualize_sample(self, prediction: Any, label: Any, sample_id: Optional[str] = None, **auxiliary: Any) -> Dict[str, Any]:
+        """Build the visualization messages for a single (prediction, label) pair.
+
+        Called once per sample while visualization is enabled, with the same
+        arguments as :meth:`record_sample`.
+
+        Returns
+        -------
+        A dictionary mapping the names of :meth:`visualization_outputs` to ready
+        ROS messages, empty for a benchmark that offers no visualization.
+        """
+        return {}
+
+    # ------------------------------------------------------------------
     # Concrete helpers
     # ------------------------------------------------------------------
 

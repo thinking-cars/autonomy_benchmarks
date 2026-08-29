@@ -9,6 +9,7 @@ openadservice:
     LOG_LEVEL: info
     USE_SIM_TIME: true
     BENCHMARK: nuscenes_lidar_object_detection
+    VISUALIZE: false
   args:
   - /bin/bash
   - -ic
@@ -18,4 +19,5 @@ openadservice:
       name:=${NAME} \
       log_level:=${LOG_LEVEL} \
       use_sim_time:=${USE_SIM_TIME} \
-      benchmark:=${BENCHMARK}
+      benchmark:=${BENCHMARK} \
+      visualize:=${VISUALIZE}

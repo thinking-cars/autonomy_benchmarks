@@ -11,6 +11,7 @@ Benchmarking suite for automated driving tasks
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
 | `benchmark` | `string` | `nuscenes_lidar_object_detection` | benchmark name |
+| `visualize` | `bool` | `false` | publish the per-sample true positives, false positives and false negatives for RViz |
 
 ## Launch Files
 
@@ -23,3 +24,4 @@ Benchmarking suite for automated driving tasks
 | `namespace` | `""` | node namespace |
 | `log_level` | `"info"` | ros logging level |
 | `use_sim_time` | `"true"` | use sim time |
+| `visualize` | `"false"` | publish the per-sample true positives, false positives and false negatives for RViz |
