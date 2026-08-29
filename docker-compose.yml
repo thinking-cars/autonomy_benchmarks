@@ -15,6 +15,9 @@ services:
           visualize:=true
     environment:
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+      DISPLAY: ${DISPLAY:-""}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
 
   autonomy_datasets:
     image: ghcr.io/thinking-cars/autonomy_datasets:latest
@@ -24,24 +27,16 @@ services:
       - |
         ros2 launch autonomy_datasets autonomy_datasets.launch.py \
           dataset:=nuscenes \
-          wait_for_ack:=true
+          config:=/params_nuscenes.yml \
+          wait_for_ack:=true \
+          rviz:=no
     environment:
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp
-      DISPLAY: ${DISPLAY:-""}
     volumes:
-      - ./config/params_nuscenes.yml:/docker-ros/ws/install/autonomy_datasets/share/autonomy_datasets/config/params_nuscenes.yml
-      - ./conf.rviz:/docker-ros/ws/install/autonomy_datasets/share/autonomy_datasets/config/config.rviz
+      - ./config/params_nuscenes.yml:/params_nuscenes.yml
       - $DATASET_DIR:/datasets
-      - /tmp/.X11-unix:/tmp/.X11-unix
     depends_on:
       - autonomy_benchmarks
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
 
   autoware_lidar_centerpoint:
     profiles:

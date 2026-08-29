@@ -5,9 +5,11 @@
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node, SetParameter
 from launch_ros.parameter_descriptions import ParameterValue
+from launch_ros.substitutions import FindPackageShare
 
 # Names of the benchmark's data inputs. Each name must match a key returned by
 # the benchmark's ``required_inputs()`` (and thus a ``compute_sample_metrics``
@@ -43,7 +45,7 @@ def generate_launch_description():
             "visualize",
             default_value="false",
             choices=["true", "false"],
-            description="publish the per-sample true positives, false positives and false negatives for RViz",
+            description="publish the per-sample true positives, false positives and false negatives and open RViz on them",
         ),
         # One argument per benchmark input; defaults to the node-relative name so
         # an unset input is a no-op remap. Override with e.g. prediction:=/real/topic.
@@ -76,11 +78,23 @@ def generate_launch_description():
         output="screen",
         emulate_tty=True,
     )
+    rviz = Node(
+        package="rviz2",
+        executable="rviz2",
+        name="rviz2",
+        arguments=[
+            "-d",
+            PathJoinSubstitution([FindPackageShare("autonomy_benchmarks"), "config", "conf.rviz"]),
+        ],
+        condition=IfCondition(LaunchConfiguration("visualize")),
+        output="screen",
+    )
 
     return LaunchDescription(
         [
             *args,
             SetParameter("use_sim_time", LaunchConfiguration("use_sim_time")),
             node,
+            rviz,
         ]
     )

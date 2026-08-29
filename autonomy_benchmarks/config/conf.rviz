@@ -6,7 +6,7 @@ Panels:
       Expanded:
         - /Grid1/Offset1
       Splitter Ratio: 0.5411764979362488
-    Tree Height: 443
+    Tree Height: 429
   - Class: rviz_common/Selection
     Name: Selection
   - Class: rviz_common/Tool Properties
@@ -62,244 +62,6 @@ Visualization Manager:
         {}
       Update Interval: 0
       Value: false
-    - Class: rviz_default_plugins/Camera
-      Enabled: false
-      Far Plane Distance: 100
-      Image Rendering: background and overlay
-      Name: camera_01
-      Overlay Alpha: 0.5
-      Topic:
-        Depth: 1
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /camera_01/image_raw
-      Value: false
-      Visibility:
-        Detected Objects: true
-        EgoData: false
-        False Negatives: true
-        False Positives: true
-        Grid: false
-        "Objects: all cameras": true
-        "Objects: camera_01": true
-        "Objects: lidar_01": true
-        TF: false
-        True Positives: true
-        Value: true
-        camera_02: true
-        camera_03: true
-        camera_04: true
-        camera_05: true
-        camera_06: true
-        camera_07: true
-        lidar_01: false
-        radar_01: false
-      Zoom Factor: 1
-    - Class: rviz_default_plugins/Camera
-      Enabled: false
-      Far Plane Distance: 100
-      Image Rendering: background and overlay
-      Name: camera_02
-      Overlay Alpha: 0.5
-      Topic:
-        Depth: 1
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /camera_02/image_raw
-      Value: false
-      Visibility:
-        Detected Objects: true
-        EgoData: false
-        False Negatives: true
-        False Positives: true
-        Grid: false
-        "Objects: all cameras": true
-        "Objects: camera_01": true
-        "Objects: lidar_01": true
-        TF: false
-        True Positives: true
-        Value: true
-        camera_01: true
-        camera_03: true
-        camera_04: true
-        camera_05: true
-        camera_06: true
-        camera_07: true
-        lidar_01: false
-        radar_01: false
-      Zoom Factor: 1
-    - Class: rviz_default_plugins/Camera
-      Enabled: false
-      Far Plane Distance: 100
-      Image Rendering: background and overlay
-      Name: camera_03
-      Overlay Alpha: 0.5
-      Topic:
-        Depth: 1
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /camera_03/image_raw
-      Value: false
-      Visibility:
-        Detected Objects: true
-        EgoData: false
-        False Negatives: true
-        False Positives: true
-        Grid: false
-        "Objects: all cameras": true
-        "Objects: camera_01": true
-        "Objects: lidar_01": true
-        TF: false
-        True Positives: true
-        Value: true
-        camera_01: true
-        camera_02: true
-        camera_04: true
-        camera_05: true
-        camera_06: true
-        camera_07: true
-        lidar_01: false
-        radar_01: false
-      Zoom Factor: 1
-    - Class: rviz_default_plugins/Camera
-      Enabled: false
-      Far Plane Distance: 100
-      Image Rendering: background and overlay
-      Name: camera_04
-      Overlay Alpha: 0.5
-      Topic:
-        Depth: 1
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /camera_04/image_raw
-      Value: false
-      Visibility:
-        Detected Objects: true
-        EgoData: false
-        False Negatives: true
-        False Positives: true
-        Grid: false
-        "Objects: all cameras": true
-        "Objects: camera_01": true
-        "Objects: lidar_01": true
-        TF: false
-        True Positives: true
-        Value: true
-        camera_01: true
-        camera_02: true
-        camera_03: true
-        camera_05: true
-        camera_06: true
-        camera_07: true
-        lidar_01: false
-        radar_01: false
-      Zoom Factor: 1
-    - Class: rviz_default_plugins/Camera
-      Enabled: false
-      Far Plane Distance: 100
-      Image Rendering: background and overlay
-      Name: camera_05
-      Overlay Alpha: 0.5
-      Topic:
-        Depth: 1
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /camera_05/image_raw
-      Value: false
-      Visibility:
-        Detected Objects: true
-        EgoData: false
-        False Negatives: true
-        False Positives: true
-        Grid: false
-        "Objects: all cameras": true
-        "Objects: camera_01": true
-        "Objects: lidar_01": true
-        TF: false
-        True Positives: true
-        Value: true
-        camera_01: true
-        camera_02: true
-        camera_03: true
-        camera_04: true
-        camera_06: true
-        camera_07: true
-        lidar_01: false
-        radar_01: false
-      Zoom Factor: 1
-    - Class: rviz_default_plugins/Camera
-      Enabled: false
-      Far Plane Distance: 100
-      Image Rendering: background and overlay
-      Name: camera_06
-      Overlay Alpha: 0.5
-      Topic:
-        Depth: 1
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /camera_06/image_raw
-      Value: false
-      Visibility:
-        Detected Objects: true
-        EgoData: false
-        False Negatives: true
-        False Positives: true
-        Grid: false
-        "Objects: all cameras": true
-        "Objects: camera_01": true
-        "Objects: lidar_01": true
-        TF: false
-        True Positives: true
-        Value: true
-        camera_01: true
-        camera_02: true
-        camera_03: true
-        camera_04: true
-        camera_05: true
-        camera_07: true
-        lidar_01: false
-        radar_01: false
-      Zoom Factor: 1
-    - Class: rviz_default_plugins/Camera
-      Enabled: false
-      Far Plane Distance: 100
-      Image Rendering: background and overlay
-      Name: camera_07
-      Overlay Alpha: 0.5
-      Topic:
-        Depth: 1
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /camera_07/image_raw
-      Value: false
-      Visibility:
-        Detected Objects: true
-        EgoData: false
-        False Negatives: true
-        False Positives: true
-        Grid: false
-        "Objects: all cameras": true
-        "Objects: camera_01": true
-        "Objects: lidar_01": true
-        TF: false
-        True Positives: true
-        Value: true
-        camera_01: true
-        camera_02: true
-        camera_03: true
-        camera_04: true
-        camera_05: true
-        camera_06: true
-        lidar_01: false
-        radar_01: false
-      Zoom Factor: 1
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -333,39 +95,6 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
-    - Alpha: 0.20000000298023224
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds:
-        Max Value: 10
-        Min Value: -10
-        Value: true
-      Axis: Z
-      Channel Name: intensity
-      Class: rviz_default_plugins/PointCloud2
-      Color: 255; 255; 255
-      Color Transformer: Intensity
-      Decay Time: 0
-      Enabled: false
-      Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Max Intensity: 82944
-      Min Color: 0; 0; 0
-      Min Intensity: 0.000827789306640625
-      Name: radar_01
-      Position Transformer: XYZ
-      Selectable: true
-      Size (Pixels): 3
-      Size (m): 1
-      Style: Boxes
-      Topic:
-        Depth: 1
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /radar_01/point_cloud
-      Use Fixed Frame: true
-      Use rainbow: true
-      Value: false
     - Acceleration arrow:
         Acceleration Color: 255; 0; 0
         Acceleration scale: 10
@@ -456,8 +185,8 @@ Visualization Manager:
         Value: " "
       Class: perception_msgs/ObjectList
       Color: 0; 0; 255
-      Enabled: true
-      Name: "Objects: lidar_01"
+      Enabled: false
+      Name: "Labels: lidar_01"
       Predictions:
         Line Color: 0; 255; 0
         Line Width: 1
@@ -488,156 +217,6 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /object_list/lidar_01
-      Value: true
-      Velocity arrow:
-        Use velocity color: true
-        Value: false
-        Velocity Color: 255; 0; 255
-        Velocity scale: 1
-    - Acceleration arrow:
-        Acceleration Color: 255; 0; 0
-        Acceleration scale: 10
-        Use acceleration color: true
-        Value: false
-      Alpha: 0.5
-      Appearance Properties:
-        Bounding box:
-          Orientation Indication: false
-          Value: true
-        Classification coloring:
-          ANIMAL: 0; 128; 128
-          BICYCLE: 255; 255; 25
-          BUS: 25; 25; 255
-          CAR: 25; 25; 255
-          MICRO: 25; 255; 255
-          MOTORCYCLE: 255; 255; 25
-          PEDESTRIAN: 25; 255; 255
-          UNKNOWN: 128; 128; 128
-          UTILITY: 25; 25; 255
-          VRU: 25; 255; 255
-          Value: true
-        Hoverboard:
-          Corner Radius [m]: 0.3499999940395355
-          Corner Style:
-            Round Segments: 12
-            Value: Round
-          Glow:
-            Glow Height [m]: 0.699999988079071
-            Glow Intensity [0..1]: 0.6000000238418579
-            Value: true
-          Thickness [m]: 0.11999999731779099
-          Value: false
-        Mesh: false
-        Value: " "
-      Class: perception_msgs/ObjectList
-      Color: 0; 255; 25
-      Enabled: false
-      Name: "Objects: camera_01"
-      Predictions:
-        Line Color: 0; 255; 0
-        Line Width: 1
-        Prediction Points:
-          Point Color: 255; 170; 0
-          Point Width: 0.5
-          Value: true
-          Velocity-based height: true
-        Probabilities:
-          Char height: 4
-          Value: false
-        Value: true
-      Text information:
-        Char height: 1
-        Classification: true
-        Classification coloring: true
-        Existence probability: false
-        Object ID: true
-        Value: true
-        Velocity: true
-      Timeout:
-        Duration: 1
-        Value: false
-      Topic:
-        Depth: 1
-        Durability Policy: Volatile
-        Filter size: 10
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /object_list/camera_01
-      Value: false
-      Velocity arrow:
-        Use velocity color: true
-        Value: false
-        Velocity Color: 255; 0; 255
-        Velocity scale: 1
-    - Acceleration arrow:
-        Acceleration Color: 255; 0; 0
-        Acceleration scale: 10
-        Use acceleration color: true
-        Value: false
-      Alpha: 0.5
-      Appearance Properties:
-        Bounding box:
-          Orientation Indication: false
-          Value: true
-        Classification coloring:
-          ANIMAL: 0; 128; 128
-          BICYCLE: 255; 255; 25
-          BUS: 25; 25; 255
-          CAR: 25; 25; 255
-          MICRO: 25; 255; 255
-          MOTORCYCLE: 255; 255; 25
-          PEDESTRIAN: 25; 255; 255
-          UNKNOWN: 128; 128; 128
-          UTILITY: 25; 25; 255
-          VRU: 25; 255; 255
-          Value: true
-        Hoverboard:
-          Corner Radius [m]: 0.3499999940395355
-          Corner Style:
-            Round Segments: 12
-            Value: Round
-          Glow:
-            Glow Height [m]: 0.699999988079071
-            Glow Intensity [0..1]: 0.6000000238418579
-            Value: true
-          Thickness [m]: 0.11999999731779099
-          Value: false
-        Mesh: false
-        Value: " "
-      Class: perception_msgs/ObjectList
-      Color: 0; 255; 25
-      Enabled: false
-      Name: "Objects: all cameras"
-      Predictions:
-        Line Color: 0; 255; 0
-        Line Width: 1
-        Prediction Points:
-          Point Color: 255; 170; 0
-          Point Width: 0.5
-          Value: true
-          Velocity-based height: true
-        Probabilities:
-          Char height: 4
-          Value: false
-        Value: true
-      Text information:
-        Char height: 4
-        Classification: true
-        Classification coloring: true
-        Existence probability: false
-        Object ID: false
-        Value: false
-        Velocity: true
-      Timeout:
-        Duration: 1
-        Value: false
-      Topic:
-        Depth: 1
-        Durability Policy: Volatile
-        Filter size: 10
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /object_list/cameras
       Value: false
       Velocity arrow:
         Use velocity color: true
@@ -682,7 +261,7 @@ Visualization Manager:
       Class: perception_msgs/ObjectList
       Color: 0; 255; 255
       Enabled: false
-      Name: Detected Objects
+      Name: "Predictions: lidar_01"
       Predictions:
         Line Color: 0; 255; 0
         Line Width: 1
@@ -1005,18 +584,18 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.7904000282287598
+      Pitch: 0.6553999781608582
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 2.880401611328125
+      Yaw: 2.9004018306732178
     Saved: ~
 Window Geometry:
   Displays:
     collapsed: false
-  Height: 702
+  Height: 688
   Hide Left Dock: false
   Hide Right Dock: false
-  QMainWindow State: 000000ff00000000fd00000004000000000000015600000211fc0200000009fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afc0000003b00000211000000e20100001afa000000010100000002fb0000000a005600690065007700730100000000ffffffff0000010000fffffffb000000100044006900730070006c0061007900730100000000000001560000015600fffffffc0000027f000001220000000000fffffffa000000000100000001fb0000001800430061006d00650072006100200049006d0061006700650100000000000002140000000000000000fb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000010f0000026cfc0200000002fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000001200530065006c0065006300740069006f006e010000025a000000b2000000000000000000000002000005be0000008bfc0100000008fb0000001200630061006d006500720061005f003000310000000000000005be0000007700fffffffb0000001200630061006d006500720061005f0030003200000002d8000002e60000007700fffffffb0000001200630061006d006500720061005f0030003300000003e3000001db0000007700fffffffb0000001200630061006d006500720061005f003000340000000377000001190000007700fffffffb0000001200630061006d006500720061005f0030003500000003cf000000f40000007700fffffffb0000001200630061006d006500720061005f00300036000000044d000001710000007700fffffffb0000001200630061006d006500720061005f0030003700000004e3000000cd0000007700fffffffb0000000a00560069006500770073030000004e00000080000002e10000019700000003000005be00000051fc0100000002fb0000000800540069006d00650100000000000005be0000025300fffffffb0000000800540069006d00650100000000000004500000000000000000000004620000021100000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd00000004000000000000015600000203fc0200000009fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afc0000003b00000203000000e20100001afa000000010100000002fb0000000a005600690065007700730100000000ffffffff0000010000fffffffb000000100044006900730070006c0061007900730100000000000001560000015600fffffffc0000027f000001220000000000fffffffa000000000100000001fb0000001800430061006d00650072006100200049006d0061006700650100000000000002140000000000000000fb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000010f0000026cfc0200000002fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000001200530065006c0065006300740069006f006e010000025a000000b2000000000000000000000002000005be0000008bfc0100000008fb0000001200630061006d006500720061005f003000310000000000000005be0000000000000000fb0000001200630061006d006500720061005f0030003200000002d8000002e60000000000000000fb0000001200630061006d006500720061005f0030003300000003e3000001db0000000000000000fb0000001200630061006d006500720061005f003000340000000377000001190000000000000000fb0000001200630061006d006500720061005f0030003500000003cf000000f40000000000000000fb0000001200630061006d006500720061005f00300036000000044d000001710000000000000000fb0000001200630061006d006500720061005f0030003700000004e3000000cd0000000000000000fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000005b000000051fc0100000002fb0000000800540069006d00650100000000000005b00000025300fffffffb0000000800540069006d00650100000000000004500000000000000000000004540000020300000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Time:
@@ -1025,20 +604,6 @@ Window Geometry:
     collapsed: false
   Views:
     collapsed: false
-  Width: 1470
+  Width: 1456
   X: 66
   Y: 32
-  camera_01:
-    collapsed: false
-  camera_02:
-    collapsed: false
-  camera_03:
-    collapsed: false
-  camera_04:
-    collapsed: false
-  camera_05:
-    collapsed: false
-  camera_06:
-    collapsed: false
-  camera_07:
-    collapsed: false
