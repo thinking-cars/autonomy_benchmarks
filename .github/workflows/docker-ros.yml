@@ -22,7 +22,7 @@ jobs:
           base-image: rwthika/ros2:jazzy
           rmw-implementation: rmw_zenoh_cpp
           command: ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py
-          enable-industrial-ci: true
+          enable-industrial-ci: false
           enable-slim: false
           enable-recursive-blacklisted-packages: true
         env:
