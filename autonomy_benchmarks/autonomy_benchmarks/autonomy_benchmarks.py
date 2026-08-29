@@ -9,6 +9,7 @@ import rclpy.exceptions
 import tf2_ros
 from rcl_interfaces.msg import FloatingPointRange, IntegerRange, ParameterDescriptor, SetParametersResult
 from rclpy.node import Node
+from rclpy.publisher import Publisher
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 
 
@@ -25,6 +26,13 @@ class AutonomyBenchmarks(Node):
             param_type=rclpy.Parameter.Type.STRING,
             description="benchmark name",
             default="nuscenes_lidar_object_detection",
+        )
+
+        self.visualize = self.declare_and_load_parameter(
+            name="visualize",
+            param_type=rclpy.Parameter.Type.BOOL,
+            description="publish the per-sample true positives, false positives and false negatives for RViz",
+            default=False,
         )
 
         self.setup()
@@ -165,6 +173,22 @@ class AutonomyBenchmarks(Node):
         )
         self.message_synchronizer.registerCallback(self.evaluate_sample)
 
+        # create publishers visualizing the benchmark's per-sample matching outcome
+        self.visualization_publishers: dict[str, Publisher] = {}
+        if self.visualize:
+            for msg_topic, msg_type in benchmark_handler.visualization_outputs().items():
+                self.visualization_publishers[msg_topic] = self.create_publisher(
+                    msg_type,
+                    f"~/{msg_topic}",
+                    qos_profile=QoSProfile(
+                        reliability=ReliabilityPolicy.RELIABLE,
+                        durability=DurabilityPolicy.VOLATILE,
+                        history=HistoryPolicy.KEEP_LAST,
+                        depth=10,
+                    ),
+                )
+            self.get_logger().info(f"Visualizing benchmark results on: {sorted(self.visualization_publishers)}")
+
         # store handler and ordered topic list for use in evaluate_sample
         self.benchmark_handler = benchmark_handler
         self.input_topics: list = list(benchmark_handler.required_inputs().keys())
@@ -199,6 +223,12 @@ class AutonomyBenchmarks(Node):
 
         result = self.benchmark_handler.record_sample(sample_id=sample_id, **messages)
         self.get_logger().info(f"Sample '{sample_id}' result: {result}")
+
+        # publish the sample's matching outcome for inspection in RViz
+        if self.visualization_publishers:
+            visualization = self.benchmark_handler.visualize_sample(sample_id=sample_id, **messages)
+            for msg_topic, publisher in self.visualization_publishers.items():
+                publisher.publish(visualization[msg_topic])
 
         aggregated = self.benchmark_handler.finalize()
         self.get_logger().info(

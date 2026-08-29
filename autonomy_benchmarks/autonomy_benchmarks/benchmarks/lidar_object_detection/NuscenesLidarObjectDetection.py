@@ -318,7 +318,9 @@ class NuscenesLidarObjectDetection(AutonomyBenchmark):
                 perception enum).
 
         Returns:
-            Object records (dicts); each ``class_name`` is the canonical class name.
+            Object records (dicts); each ``class_name`` is the canonical class
+            name and ``object`` is the ``perception_msgs/Object`` it came from,
+            so the matching outcome can be published for visualization.
 
         Raises:
             ValueError: a label with a missing or unrecognised ``original_class``.
@@ -377,6 +379,7 @@ class NuscenesLidarObjectDetection(AutonomyBenchmark):
                     "attribute": attribute,
                     "number_of_lidar_points": num_lidar_points,
                     "number_of_radar_points": num_radar_points,
+                    "object": obj,
                 }
             )
         return result
@@ -420,6 +423,84 @@ class NuscenesLidarObjectDetection(AutonomyBenchmark):
             "sample_prediction_num": sample_prediction_num,
             "sample_ground_truth_num": sample_ground_truth_num,
             "match_records": match_records,
+        }
+
+    def visualization_outputs(self) -> Dict[str, Any]:
+        """Define the ROS message types published when visualization is enabled.
+
+        Returns:
+            Output name to ROS message type. The keys match those of
+            :meth:`visualize_sample` and are node-relative topic names.
+        """
+
+        return {
+            "true_positives": ObjectList,
+            "false_positives": ObjectList,
+            "false_negatives": ObjectList,
+        }
+
+    def visualize_sample(
+        self,
+        prediction: Any,
+        label: Any,
+        sample_id: Optional[str] = None,
+        label_meta_info: Any = None,
+    ) -> Dict[str, Any]:
+        """Split one frame's objects into true positives, false positives and false negatives.
+
+        Runs the same extraction, filtering and matching as
+        :meth:`compute_sample_metrics` - through the shared
+        :meth:`_match_boxes` - at the TP metric threshold
+        (:attr:`tp_metric_threshold`), and hands back the source messages behind
+        the outcome: a prediction that claimed a GT box is a true positive, a
+        prediction that claimed none is a false positive, and a GT box no
+        prediction claimed is a false negative.
+
+        Objects dropped before matching (ignored classes, bike racks, boxes
+        beyond their class range, GT boxes without sensor points) appear in none
+        of the three lists. That is deliberate: seeing what silently disappears
+        is how an over-eager filter shows up in RViz.
+
+        Args:
+            prediction: Predicted objects (``perception_msgs/ObjectList``).
+            label: Ground-truth objects (``perception_msgs/ObjectList``).
+            sample_id: Optional frame identifier (unused).
+            label_meta_info: The dataset annotations of ``label``
+                (``autonomy_datasets_msgs/ObjectListMetaInfo``).
+
+        Returns:
+            Output name to ``perception_msgs/ObjectList``, keyed as in
+            :meth:`visualization_outputs`. The positives carry predicted
+            objects and the header of ``prediction``; the false negatives carry
+            ground-truth objects and the header of ``label``.
+        """
+
+        pred_boxes, gt_boxes = self._prepare_pred_gt_boxes(
+            self._extract_objects(prediction, is_label=False),
+            self._extract_objects(label, label_meta_info, is_label=True),
+        )
+        gt_by_class = self._group_by_class(gt_boxes)
+        pred_by_class = self._group_by_class(pred_boxes)
+
+        true_positives: List[Any] = []
+        false_positives: List[Any] = []
+        false_negatives: List[Any] = []
+        for class_name in set(gt_by_class) | set(pred_by_class):
+            gts = gt_by_class.get(class_name, [])
+            preds = self._sorted_by_confidence(pred_by_class.get(class_name, []))
+            matched_gt_indices: set = set()
+            for pred, (gt_index, _) in zip(preds, self._match_boxes(preds, gts, self.tp_metric_threshold)):
+                if gt_index == -1:
+                    false_positives.append(pred["object"])
+                else:
+                    matched_gt_indices.add(gt_index)
+                    true_positives.append(pred["object"])
+            false_negatives += [gt["object"] for gt_index, gt in enumerate(gts) if gt_index not in matched_gt_indices]
+
+        return {
+            "true_positives": ObjectList(header=prediction.header, objects=true_positives),
+            "false_positives": ObjectList(header=prediction.header, objects=false_positives),
+            "false_negatives": ObjectList(header=label.header, objects=false_negatives),
         }
 
     def compute_aggregated_metrics(self, sample_results: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -591,6 +672,76 @@ class NuscenesLidarObjectDetection(AutonomyBenchmark):
         gt_boxes = self._boxes_filter_per_class(gt_boxes, self.per_class_detection_ranges, include_end=True)
         return pred_boxes, gt_boxes
 
+    @staticmethod
+    def _group_by_class(boxes: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+        """Index object records by their canonical class name.
+
+        Args:
+            boxes: Object records to index.
+
+        Returns:
+            Class name to its records, in the given order.
+        """
+
+        by_class: Dict[str, List[Dict[str, Any]]] = {}
+        for box in boxes:
+            by_class.setdefault(box["class_name"], []).append(box)
+        return by_class
+
+    @staticmethod
+    def _sorted_by_confidence(boxes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Order predictions by descending confidence, as the greedy matcher expects.
+
+        Args:
+            boxes: Prediction records of one class.
+
+        Returns:
+            The records, most confident first.
+        """
+
+        return sorted(boxes, key=lambda box: -(box["confidence_score"] or 0.0))
+
+    def _match_boxes(
+        self,
+        preds: List[Dict[str, Any]],
+        gts: List[Dict[str, Any]],
+        threshold: float,
+    ) -> List[Tuple[int, float]]:
+        """Greedily match one class' predictions to its ground truth.
+
+        Predictions are matched in the given order (highest confidence first);
+        each claims the nearest still-unmatched GT no further away than
+        ``threshold``. Shared by scoring (:meth:`_run_matching`) and
+        visualization (:meth:`visualize_sample`) so both classify identically.
+
+        Args:
+            preds: Prediction records of one class, highest confidence first.
+            gts: Ground-truth records of the same class.
+            threshold: Maximum BEV center distance for a match.
+
+        Returns:
+            One ``(gt_index, dist)`` pair per prediction, in the order of
+            ``preds``: the index of the GT it claimed in ``gts`` and the
+            distance to it, or ``(-1, inf)`` when it matched nothing.
+        """
+
+        matched_gt_indices: set = set()
+        assignments: List[Tuple[int, float]] = []
+        for pred in preds:
+            best_dist = float("inf")
+            best_gt_idx = -1
+            for gt_idx, gt in enumerate(gts):
+                if gt_idx in matched_gt_indices:
+                    continue
+                dist = self.compute_dist_func(pred, gt)
+                if dist <= threshold and dist < best_dist:
+                    best_dist = dist
+                    best_gt_idx = gt_idx
+            if best_gt_idx != -1:
+                matched_gt_indices.add(best_gt_idx)
+            assignments.append((best_gt_idx, best_dist))
+        return assignments
+
     def _run_matching(
         self,
         pred_boxes: List[Dict[str, Any]],
@@ -614,12 +765,8 @@ class NuscenesLidarObjectDetection(AutonomyBenchmark):
             attribute, else ``None``).
         """
         # Index boxes by class.
-        gt_by_class: Dict[str, List[Dict[str, Any]]] = {}
-        for gt in gt_boxes:
-            gt_by_class.setdefault(gt["class_name"], []).append(gt)
-        pred_by_class: Dict[str, List[Dict[str, Any]]] = {}
-        for pred in pred_boxes:
-            pred_by_class.setdefault(pred["class_name"], []).append(pred)
+        gt_by_class = self._group_by_class(gt_boxes)
+        pred_by_class = self._group_by_class(pred_boxes)
 
         all_class_names = set(gt_by_class) | set(pred_by_class)
 
@@ -628,28 +775,13 @@ class NuscenesLidarObjectDetection(AutonomyBenchmark):
             match_records[threshold] = {}
             for class_name in all_class_names:
                 gts = gt_by_class.get(class_name, [])
-                preds = sorted(
-                    pred_by_class.get(class_name, []),
-                    key=lambda p: -(p["confidence_score"] or 0.0),
-                )
+                preds = self._sorted_by_confidence(pred_by_class.get(class_name, []))
                 gt_count = len(gts)
-                matched_gt_indices: set = set()
                 pred_entries: List[Dict[str, Any]] = []
 
-                for pred in preds:
-                    best_dist = float("inf")
-                    best_gt_idx = -1
-                    for gt_idx, gt in enumerate(gts):
-                        if gt_idx in matched_gt_indices:
-                            continue
-                        dist = self.compute_dist_func(pred, gt)
-                        if dist <= threshold and dist < best_dist:
-                            best_dist = dist
-                            best_gt_idx = gt_idx
-
+                for pred, (best_gt_idx, best_dist) in zip(preds, self._match_boxes(preds, gts, threshold)):
                     if best_gt_idx != -1:
                         matched_gt = gts[best_gt_idx]
-                        matched_gt_indices.add(best_gt_idx)
                         # ATE: BEV Euclidean translation error.
                         ate = math.sqrt((pred["x"] - matched_gt["x"]) ** 2 + (pred["y"] - matched_gt["y"]) ** 2)
                         # ASE: 1 - 3D IoU after aligning centers and orientation.

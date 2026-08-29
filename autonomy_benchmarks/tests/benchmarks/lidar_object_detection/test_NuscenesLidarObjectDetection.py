@@ -65,6 +65,7 @@ def _pred(
     vel_lat=0.0,
     class_type=ObjectClassification.CAR,
     confidence=0.9,
+    obj_id=0,
 ) -> Object:
     """Build a prediction ``Object``.
 
@@ -82,7 +83,7 @@ def _pred(
         vel_lat,
         [ObjectClassification(type=class_type, probability=confidence)],
     )
-    return Object(state=state, existence_probability=confidence)
+    return Object(id=obj_id, state=state, existence_probability=confidence)
 
 
 def _gt(
@@ -120,12 +121,16 @@ def _gt(
     return Object(state=state, existence_probability=1.0), object_annotations or None
 
 
-def _msg(objs) -> ObjectList:
+def _msg(objs, frame_id: str = "base_link") -> ObjectList:
     """Wrap objects in a ``perception_msgs/ObjectList`` message."""
-    return ObjectList(objects=objs)
+    msg = ObjectList(objects=objs)
+    msg.header.frame_id = frame_id
+    return msg
 
 
-def _label(gts: List[GroundTruth], reverse_meta: bool = False) -> Tuple[ObjectList, ObjectListMetaInfo]:
+def _label(
+    gts: List[GroundTruth], reverse_meta: bool = False, frame_id: str = "base_link"
+) -> Tuple[ObjectList, ObjectListMetaInfo]:
     """Split ``_gt`` pairs into the label and label meta info messages.
 
     Object IDs are assigned per frame and are what correlates both messages;
@@ -136,6 +141,7 @@ def _label(gts: List[GroundTruth], reverse_meta: bool = False) -> Tuple[ObjectLi
         gts: ``(object, annotations)`` pairs as returned by :func:`_gt`.
         reverse_meta: Publish the meta info entries in the reverse order of the
             objects, to prove the correlation is by ID and not by position.
+        frame_id: Frame of both message headers.
 
     Returns:
         The ``(ObjectList, ObjectListMetaInfo)`` pair for the frame.
@@ -150,7 +156,11 @@ def _label(gts: List[GroundTruth], reverse_meta: bool = False) -> Tuple[ObjectLi
             meta_entries.append(ObjectMetaInfo(id=object_id, info=info))
     if reverse_meta:
         meta_entries.reverse()
-    return ObjectList(objects=objects), ObjectListMetaInfo(objects=meta_entries)
+    label = ObjectList(objects=objects)
+    label.header.frame_id = frame_id
+    meta_info = ObjectListMetaInfo(objects=meta_entries)
+    meta_info.header.frame_id = frame_id
+    return label, meta_info
 
 
 class TestNuscenesLidarObjectDetection:
@@ -172,6 +182,11 @@ class TestNuscenesLidarObjectDetection:
         """
         label, label_meta_info = _label(gts, reverse_meta=reverse_meta)
         return self.bm.compute_sample_metrics(_msg(pred_objs), label, label_meta_info=label_meta_info)
+
+    def _visualize(self, pred_objs, gts) -> dict:
+        """Build the visualization object lists the way the node's callback does."""
+        label, label_meta_info = _label(gts)
+        return self.bm.visualize_sample(_msg(pred_objs), label, label_meta_info=label_meta_info)
 
     def test_empty_inputs(self):
         """Verify empty inputs produce valid match records for all thresholds."""
@@ -412,6 +427,58 @@ class TestNuscenesLidarObjectDetection:
         r2 = self._make_sample_result([_pred(x=0.0, confidence=0.8)], [_gt(x=0.0, num_lidar_pts=5)])
         merged = self.bm._merge_match_records([r1["metrics"]["match_records"], r2["metrics"]["match_records"]])
         assert merged[0.5]["car"]["gt_count"] == 2
+
+    # --- visualization of the per-sample matching outcome ---
+
+    def test_visualization_outputs_are_object_lists(self):
+        """The benchmark declares one ObjectList output per matching outcome."""
+        assert self.bm.visualization_outputs() == {
+            "true_positives": ObjectList,
+            "false_positives": ObjectList,
+            "false_negatives": ObjectList,
+        }
+
+    def test_visualization_splits_outcomes_by_source_object(self):
+        """A matched prediction is a TP, an unmatched one an FP, a missed GT an FN."""
+        preds = [_pred(x=0.0, obj_id=100), _pred(x=15.0, obj_id=101)]
+        # _label assigns the GT IDs 0 and 1, in order.
+        gts = [_gt(x=0.0, num_lidar_pts=5), _gt(x=30.0, num_lidar_pts=5)]
+        outputs = self._visualize(preds, gts)
+        assert [obj.id for obj in outputs["true_positives"].objects] == [100]
+        assert [obj.id for obj in outputs["false_positives"].objects] == [101]
+        assert [obj.id for obj in outputs["false_negatives"].objects] == [1]
+
+    def test_visualization_agrees_with_the_scored_matching(self):
+        """The split reproduces what was scored at the TP metric threshold."""
+        preds = [_pred(x=0.0, obj_id=100), _pred(x=15.0, obj_id=101)]
+        gts = [_gt(x=0.0, num_lidar_pts=5), _gt(x=30.0, num_lidar_pts=5)]
+        entries = self._metrics(preds, gts)["match_records"][self.bm.tp_metric_threshold]["car"]["pred_entries"]
+        outputs = self._visualize(preds, gts)
+        assert sum(entry["is_tp"] for entry in entries) == len(outputs["true_positives"].objects)
+        assert sum(not entry["is_tp"] for entry in entries) == len(outputs["false_positives"].objects)
+
+    def test_visualization_keeps_the_source_headers(self):
+        """Positives carry the prediction header, negatives the label header."""
+        # Distinct frames only to show which header each output copies; a real
+        # synchronized frame has the same header on both inputs.
+        prediction = _msg([_pred(x=0.0, obj_id=100), _pred(x=15.0, obj_id=101)], frame_id="prediction_frame")
+        label, label_meta_info = _label([_gt(x=30.0, num_lidar_pts=5)], frame_id="label_frame")
+        outputs = self.bm.visualize_sample(prediction, label, label_meta_info=label_meta_info)
+        assert outputs["true_positives"].header.frame_id == "prediction_frame"
+        assert outputs["false_positives"].header.frame_id == "prediction_frame"
+        assert outputs["false_negatives"].header.frame_id == "label_frame"
+
+    def test_visualization_omits_objects_dropped_before_matching(self):
+        """Objects the pre-matching filters remove appear in none of the lists."""
+        gts = [
+            _gt(x=0.0, original_class="vehicle.car", num_lidar_pts=0, num_radar_pts=0),  # no sensor points
+            _gt(x=1.0, original_class="animal", num_lidar_pts=5),  # non-evaluated class
+            _gt(x=60.0, original_class="vehicle.car", num_lidar_pts=5),  # beyond the 50 m car range
+        ]
+        outputs = self._visualize([], gts)
+        assert outputs["true_positives"].objects == []
+        assert outputs["false_positives"].objects == []
+        assert outputs["false_negatives"].objects == []
 
     @staticmethod
     def _tm(overall_map: float) -> dict:

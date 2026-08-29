@@ -7,6 +7,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node, SetParameter
+from launch_ros.parameter_descriptions import ParameterValue
 
 # Names of the benchmark's data inputs. Each name must match a key returned by
 # the benchmark's ``required_inputs()`` (and thus a ``compute_sample_metrics``
@@ -38,6 +39,12 @@ def generate_launch_description():
             "log_level", default_value="info", description="ROS logging level (debug, info, warn, error, fatal)"
         ),
         DeclareLaunchArgument("use_sim_time", default_value="true", description="use simulation clock"),
+        DeclareLaunchArgument(
+            "visualize",
+            default_value="false",
+            choices=["true", "false"],
+            description="publish the per-sample true positives, false positives and false negatives for RViz",
+        ),
         # One argument per benchmark input; defaults to the node-relative name so
         # an unset input is a no-op remap. Override with e.g. prediction:=/real/topic.
         *[
@@ -62,6 +69,7 @@ def generate_launch_description():
         name=LaunchConfiguration("name"),
         parameters=[
             {"benchmark": LaunchConfiguration("benchmark")},
+            {"visualize": ParameterValue(LaunchConfiguration("visualize"), value_type=bool)},
         ],
         arguments=["--ros-args", "--log-level", LaunchConfiguration("log_level")],
         remappings=remappings,
