@@ -10,7 +10,7 @@
     publish_radar_pointclouds: false
     publish_lidar_object_lists: true
     publish_camera_01_object_lists: false
-    publish_megvii_detections: true
+    publish_megvii_detections: false
 
     publish_lanelet2_map: false
     nuscenes_lanelet2_lane_width: 3.0
