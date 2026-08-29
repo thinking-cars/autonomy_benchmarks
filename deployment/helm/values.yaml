@@ -6,10 +6,15 @@ openadservice:
     NAMESPACE: /
     NAME: autonomy_benchmarks
     # --- other -----
+    REQUEST_SAMPLES: ~/request_samples
     LOG_LEVEL: info
     USE_SIM_TIME: true
     BENCHMARK: nuscenes_lidar_object_detection
     VISUALIZE: false
+    SAMPLES_PER_REQUEST: 1
+    SAMPLE_IDS: 
+    EVALUATION_TIMEOUT: 60.0
+    RESULTS_PATH: 
   args:
   - /bin/bash
   - -ic
@@ -20,4 +25,9 @@ openadservice:
       log_level:=${LOG_LEVEL} \
       use_sim_time:=${USE_SIM_TIME} \
       benchmark:=${BENCHMARK} \
-      visualize:=${VISUALIZE}
+      visualize:=${VISUALIZE} \
+      samples_per_request:=${SAMPLES_PER_REQUEST} \
+      ${SAMPLE_IDS:+sample_ids:=${SAMPLE_IDS}} \
+      evaluation_timeout:=${EVALUATION_TIMEOUT} \
+      ${RESULTS_PATH:+results_path:=${RESULTS_PATH}} \
+      request_samples:=${REQUEST_SAMPLES}
