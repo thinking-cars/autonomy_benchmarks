@@ -13,7 +13,8 @@ services:
           prediction:=/object_list/prediction \
           label:=/object_list/lidar_01 \
           request_samples:=/datasets/request_samples \
-          visualize:=true
+          visualize:=true \
+          results_path:=results.json
     environment:
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp
       DISPLAY: ${DISPLAY:-""}

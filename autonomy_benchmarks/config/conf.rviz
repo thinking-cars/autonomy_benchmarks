@@ -5,6 +5,8 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Grid1/Offset1
+        - /False Positives1/Text information1
+        - /False Negatives1/Text information1
       Splitter Ratio: 0.5411764979362488
     Tree Height: 429
   - Class: rviz_common/Selection
@@ -355,7 +357,7 @@ Visualization Manager:
         Classification coloring: true
         Existence probability: false
         Object ID: true
-        Value: true
+        Value: false
         Velocity: true
       Timeout:
         Duration: 1
@@ -378,7 +380,7 @@ Visualization Manager:
         Acceleration scale: 10
         Use acceleration color: true
         Value: false
-      Alpha: 0.5
+      Alpha: 0.699999988079071
       Appearance Properties:
         Bounding box:
           Orientation Indication: true
@@ -425,13 +427,13 @@ Visualization Manager:
           Value: false
         Value: false
       Text information:
-        Char height: 4
+        Char height: 0.5
         Classification: true
-        Classification coloring: true
+        Classification coloring: false
         Existence probability: false
         Object ID: true
         Value: true
-        Velocity: true
+        Velocity: false
       Timeout:
         Duration: 1
         Value: false
@@ -500,13 +502,13 @@ Visualization Manager:
           Value: false
         Value: false
       Text information:
-        Char height: 4
+        Char height: 0.5
         Classification: true
-        Classification coloring: true
+        Classification coloring: false
         Existence probability: false
         Object ID: true
         Value: true
-        Velocity: true
+        Velocity: false
       Timeout:
         Duration: 1
         Value: false
