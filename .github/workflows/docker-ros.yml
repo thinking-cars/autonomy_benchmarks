@@ -24,5 +24,6 @@ jobs:
           command: ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py
           enable-industrial-ci: true
           enable-slim: false
+          enable-recursive-blacklisted-packages: true
         env:
           TARGET_CMAKE_ARGS: -DCMAKE_EXPORT_COMPILE_COMMANDS=1
