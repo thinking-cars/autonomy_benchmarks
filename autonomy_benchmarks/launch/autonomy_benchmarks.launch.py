@@ -13,7 +13,13 @@ from launch_ros.actions import Node, SetParameter
 # parameter). This single list is the source of truth: it drives both the
 # per-input launch arguments and the topic remappings below, so adding a new
 # input (e.g. "map", "radar") is a one-line change here.
-_INPUTS = ["prediction", "label", "label_meta_info"]
+_INPUTS = ["prediction", "label"]
+
+# Inputs whose topic is derived from another input's topic instead of getting a
+# launch argument of its own, as ``input name -> (source input, topic suffix)``.
+# The dataset publishes the meta information of an object list next to it, on
+# "<object list topic>/meta_info".
+_DERIVED_INPUTS = {"label_meta_info": ("label", "/meta_info")}
 
 
 def generate_launch_description():
@@ -44,8 +50,10 @@ def generate_launch_description():
         ],
     ]
 
-    # Remap each node-relative input name onto the topic its argument resolves to.
+    # Remap each node-relative input name onto the topic its argument resolves to,
+    # then onto the topic derived from another input for the derived inputs.
     remappings = [(name, LaunchConfiguration(name)) for name in _INPUTS]
+    remappings += [(name, [LaunchConfiguration(source), suffix]) for name, (source, suffix) in _DERIVED_INPUTS.items()]
 
     node = Node(
         package="autonomy_benchmarks",

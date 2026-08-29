@@ -11,8 +11,7 @@ services:
         ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py \
           benchmark:=nuscenes_lidar_object_detection \
           prediction:=/object_list/prediction \
-          label:=/object_list/lidar_01 \
-          label_meta_info:=/object_list/lidar_01/meta_info
+          label:=/object_list/lidar_01
     environment:
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp
 

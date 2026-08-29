@@ -60,7 +60,7 @@ docker compose down
 Configure the benchmark task and dataset via ROS launch arguments in [docker-compose.yml](docker-compose.yml):
 
 ```yaml
-command: ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py benchmark:=nuscenes_lidar_object_detection prediction:=$your_prediction_topic label:=$your_label_topic label_meta_info:=$your_label_topic/meta_info
+command: ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py benchmark:=nuscenes_lidar_object_detection prediction:=$your_prediction_topic label:=$your_label_topic
 ```
 
 ## 💻 Development

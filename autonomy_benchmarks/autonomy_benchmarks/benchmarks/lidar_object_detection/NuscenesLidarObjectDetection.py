@@ -253,7 +253,10 @@ class NuscenesLidarObjectDetection(AutonomyBenchmark):
         """Define expected input ROS message types.
 
         ``label_meta_info`` carries the dataset annotations of the ``label``
-        object list (``original_class``, ``attribute``, point counts).
+        object list (``original_class``, ``attribute``, point counts). The
+        dataset publishes it next to the object list, on
+        ``<label topic>/meta_info``, so the launch file derives its topic from
+        the ``label`` argument instead of exposing one of its own.
 
         Returns:
             Input name to ROS message type. The keys match the
