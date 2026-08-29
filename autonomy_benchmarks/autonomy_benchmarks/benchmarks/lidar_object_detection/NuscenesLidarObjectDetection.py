@@ -36,9 +36,10 @@ Key evaluation settings:
 - TP metrics: ATE, ASE, AOE, AVE, AAE measured at the 2.0 m threshold.
               AOE for traffic_cone is ignored (set to 0); for barrier
               it is capped at π (180°). AVE and AAE for barrier/traffic_cone
-              are ignored (set to 0 / not evaluated). AAE requires the
-              ``attribute`` field to be populated by the dataset loader;
-              when attribute data is absent, AAE is skipped per TP entry.
+              are ignored (set to 0 / not evaluated). AAE requires an
+              ``attribute`` annotation on the label meta info topic; when it
+              is absent, AAE is skipped per TP entry. Predictions have no meta
+              info topic, so an annotated GT attribute counts as a mismatch.
 - NDS:        nuScenes Detection Score combining mAP, mATE, mASE, mAOE,
               mAVE, mAAE with weights 5-1-1-1-1-1, normalised by 10.
 """
