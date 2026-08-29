@@ -12,25 +12,22 @@ services:
       - .:/docker-ros/ws/src/target
       - ${HOME}/.claude:/root/.claude
 
+  autonomy_datasets:
+    extends:
+      file: docker-compose.yml
+      service: autonomy_datasets
+    # image: ghcr.io/thinking-cars/autonomy_datasets:latest-dev
+    # command: sleep infinity
+    # volumes:
+    #   - ../autonomy_datasets:/docker-ros/ws/src/target
+    #   - ${HOME}/.claude:/root/.claude
+
   autoware_lidar_centerpoint:
     extends:
       file: docker-compose.yml
       service: autoware_lidar_centerpoint
-    # image: ghcr.io/thinking-cars/autoware_lidar_centerpoint:latest-dev_benchmark_ci
-    # command: sleep infinity
-    # volumes:
-    #   - ../autoware_lidar_centerpoint:/docker-ros/ws/src/target
 
   focalformer3d-detector:
     extends:
       file: docker-compose.yml
       service: focalformer3d-detector
-
-  autonomy_datasets:
-    extends:
-      file: docker-compose.yml
-      service: autonomy_datasets
-    # image: ghcr.io/thinking-cars/autonomy_datasets:latest-dev_benchmark_ci
-    # command: sleep infinity
-    # volumes:
-    #   - ../autonomy_datasets:/docker-ros/ws/src/target
