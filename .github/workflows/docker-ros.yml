@@ -21,7 +21,7 @@ jobs:
           target: dev,run
           base-image: rwthika/ros2:jazzy
           rmw-implementation: rmw_zenoh_cpp
-          command: ros2 launch ros2_demo_package ros2_demo_node_launch.py
+          command: ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py
           enable-industrial-ci: true
           enable-slim: false
         env:
