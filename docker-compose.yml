@@ -12,6 +12,7 @@ services:
           benchmark:=nuscenes_lidar_object_detection \
           prediction:=/object_list/prediction \
           label:=/object_list/lidar_01 \
+          request_samples:=/datasets/request_samples \
           visualize:=true
     environment:
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp
@@ -29,6 +30,7 @@ services:
           dataset:=nuscenes \
           config:=/params_nuscenes.yml \
           wait_for_ack:=true \
+          start_paused:=true \
           rviz:=no
     environment:
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp

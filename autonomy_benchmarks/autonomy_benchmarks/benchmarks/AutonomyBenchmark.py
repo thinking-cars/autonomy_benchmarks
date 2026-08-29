@@ -22,7 +22,7 @@ class AutonomyBenchmark(ABC):
     A benchmark is responsible for:
     * extracting the model input from a dataset sample,
     * computing per-sample metrics from a prediction and the ground-truth label,
-    * aggregating per-sample metrics into dataset-level metrics,
+    * aggregating per-sample metrics into scene-level and dataset-level metrics,
     * persisting results to JSON.
     """
 
@@ -111,7 +111,14 @@ class AutonomyBenchmark(ABC):
     # Concrete helpers
     # ------------------------------------------------------------------
 
-    def record_sample(self, prediction: Any, label: Any, sample_id: Optional[str] = None, **auxiliary: Any) -> Dict[str, Any]:
+    def record_sample(
+        self,
+        prediction: Any,
+        label: Any,
+        sample_id: Optional[str] = None,
+        scene_id: Optional[str] = None,
+        **auxiliary: Any,
+    ) -> Dict[str, Any]:
         """Compute and store per-sample metrics.
 
         This is the main entry point used by the evaluation loop.  Any
@@ -119,36 +126,83 @@ class AutonomyBenchmark(ABC):
         :meth:`compute_sample_metrics`, allowing benchmarks to receive
         auxiliary per-sample data (e.g. static-map annotations) without
         changing the abstract interface.
+
+        Parameters
+        ----------
+        scene_id:
+            The scene of the dataset the sample belongs to, which
+            :meth:`finalize` aggregates the samples by.  An evaluation loop
+            that learns the scene only after the sample has been evaluated may
+            set it on the returned entry instead of passing it here.
+
+        Returns
+        -------
+        The stored entry of the sample, as ``{"sample_id", "scene_id",
+        "metrics"}``.
         """
         metrics = self.compute_sample_metrics(prediction, label, sample_id, **auxiliary)
-        entry: Dict[str, Any] = {"sample_id": sample_id, "metrics": metrics}
+        entry: Dict[str, Any] = {"sample_id": sample_id, "scene_id": scene_id, "metrics": metrics}
         self._sample_results.append(entry)
         return entry
 
+    def sample_results_by_scene(self) -> Dict[str, List[Dict[str, Any]]]:
+        """Group the recorded samples by the scene of the dataset they belong to.
+
+        Returns
+        -------
+        A dictionary mapping each scene to its recorded samples, in the order
+        the samples were recorded.  Samples recorded without a scene are left
+        out, as they cannot be attributed to one.
+        """
+        scenes: Dict[str, List[Dict[str, Any]]] = {}
+        for entry in self._sample_results:
+            scene_id = entry.get("scene_id")
+            if scene_id is not None:
+                scenes.setdefault(str(scene_id), []).append(entry)
+        return scenes
+
     def finalize(self) -> Dict[str, Any]:
-        """Compute aggregated metrics and return the full results payload."""
+        """Compute aggregated metrics and return the full results payload.
+
+        Metrics are reported on three levels: ``aggregated_metrics`` over all
+        evaluated samples, ``scene_results`` over the samples of each scene, and
+        ``sample_results`` for every single sample.
+        """
         aggregated = self.compute_aggregated_metrics(self._sample_results)
+        scenes = self.sample_results_by_scene()
         return {
             "benchmark": self.name,
             "description": self.description,
             "num_samples": len(self._sample_results),
+            "num_scenes": len(scenes),
             "aggregated_metrics": aggregated,
+            "scene_results": {
+                scene_id: {
+                    "num_samples": len(entries),
+                    "sample_ids": [entry["sample_id"] for entry in entries],
+                    "aggregated_metrics": self.compute_aggregated_metrics(entries),
+                }
+                for scene_id, entries in scenes.items()
+            },
             "sample_results": self._sample_results,
         }
 
-    def save_results(self, output_path: str) -> str:
+    def save_results(self, output_path: str, results: Optional[Dict[str, Any]] = None) -> str:
         """Finalize and write results to a JSON file.
 
         Parameters
         ----------
         output_path:
             Path to the output JSON file.
+        results:
+            A results payload previously obtained from :meth:`finalize`, which
+            is computed here when omitted.
 
         Returns
         -------
         The absolute path of the written file.
         """
-        results = self.finalize()
+        results = self.finalize() if results is None else results
         os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
         with open(output_path, "w") as fh:
             json.dump(results, fh, indent=2, default=str)
