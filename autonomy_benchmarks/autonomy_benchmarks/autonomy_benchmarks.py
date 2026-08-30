@@ -355,6 +355,7 @@ class AutonomyBenchmarks(Node):
             return
         if self.publishing_finished:
             self.finalize_benchmark()
+            self.shutdown()
             return
         self.request_samples()
 
@@ -483,6 +484,15 @@ class AutonomyBenchmarks(Node):
                 self.get_logger().error(f"Failed to write benchmark results to '{self.results_path}': {exception}")
         else:
             self.get_logger().info(f"Aggregated dataset metrics:\n{aggregated_metrics}")
+
+    def shutdown(self):
+        """Stops the node, as there is nothing left to evaluate once the benchmark has finished
+
+        Shutting down the ROS context ends the spinning of the node in 'main', which lets the
+        process exit with the benchmark results reported.
+        """
+        self.get_logger().info("Nothing left to evaluate, shutting down")
+        rclpy.try_shutdown()
 
     def evaluate_sample(self, *args):
         """Callback to evaluate a single sample when all required input messages have been received.
