@@ -4,7 +4,7 @@ repositories:
   autonomy_datasets:
     type: git
     url: https://github.com/thinking-cars/autonomy_datasets.git
-    version: v1.5.0
+    version: service
   perception_interfaces:
     type: git
     url: https://github.com/ika-rwth-aachen/perception_interfaces.git

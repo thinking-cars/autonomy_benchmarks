@@ -16,11 +16,13 @@
 
   <depend>autonomy_datasets_msgs</depend>
   <depend>geometry_msgs</depend>
-  <depend>message_filters</depend>
   <depend>perception_msgs</depend>
   <depend>perception_msgs_utils</depend>
   <depend>python3-shapely</depend>
   <depend>rclpy</depend>
+
+  <exec_depend>perception_msgs_rviz_plugins</exec_depend>
+  <exec_depend>rviz2</exec_depend>
 
   <test_depend>diagnostic_msgs</test_depend>
   <test_depend>python3-pytest</test_depend>
