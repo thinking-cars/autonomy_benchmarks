@@ -3,19 +3,19 @@
 
 import json
 import time
-from collections import deque
-from typing import Any, Optional, Sequence, Union
+from collections import deque, OrderedDict
+from functools import partial
+from typing import Any, Callable, Optional, Sequence, Union
 
-import message_filters
 import rclpy
 import rclpy.exceptions
-import tf2_ros
 from autonomy_datasets_msgs.srv import RequestSamples
 from rcl_interfaces.msg import FloatingPointRange, IntegerRange, ParameterDescriptor, SetParametersResult
 from rclpy.clock import Clock, ClockType
 from rclpy.node import Node
 from rclpy.publisher import Publisher
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
+from rclpy.subscription import Subscription
 from rclpy.task import Future
 
 # Interval in seconds at which the benchmark checks whether it can request further samples; the
@@ -24,6 +24,10 @@ _REQUEST_TIMER_PERIOD_S = 0.5
 
 # Interval in seconds at which waiting for the sample request service of the dataset is logged
 _SERVICE_WAIT_LOG_INTERVAL_S = 10.0
+
+# Number of samples whose messages are kept while they wait for the messages of their remaining
+# benchmark inputs
+_SYNCHRONIZER_QUEUE_SIZE = 10
 
 
 def parse_sample_ids(sample_ids: str) -> list[int]:
@@ -39,6 +43,59 @@ def parse_sample_ids(sample_ids: str) -> list[int]:
         ValueError: if the IDs are not a comma-separated list of integers
     """
     return [int(sample_id) for sample_id in sample_ids.split(",") if sample_id.strip()]
+
+
+class SampleSynchronizer:
+    """Matches the messages of the benchmark inputs that belong to the same dataset sample.
+
+    The dataset stamps all messages of a sample with the recording time of that sample, so the
+    messages of a sample are matched by their exact header stamp. Messages of a sample that never
+    completes are dropped in the order they arrived, never by comparing their stamps: the dataset
+    replays one scene after the other, and a scene can have been recorded days before the scene
+    played before it, so the stamp of a message says nothing about how recently it was received.
+    (``message_filters.TimeSynchronizer`` drops by stamp instead, and therefore discards the
+    messages of a scene that starts before the end of the preceding one.)
+
+    Messages are added from subscription callbacks, which the node executor runs one after
+    another, so no locking is needed.
+    """
+
+    def __init__(self, topics: Sequence[str], callback: Callable[..., None], queue_size: int = _SYNCHRONIZER_QUEUE_SIZE):
+        """Constructor
+
+        Args:
+            topics (Sequence[str]): input names to match, in the order their messages are passed
+                to the callback
+            callback (Callable[..., None]): called with the messages of every completed sample
+            queue_size (int, optional): number of samples to keep while they wait for the messages
+                of their remaining inputs
+        """
+        self.topics = list(topics)
+        self.callback = callback
+        self.queue_size = queue_size
+        # messages of the samples that are still missing inputs, by header stamp and in the order
+        # the samples were first received on any input
+        self.incomplete_samples: OrderedDict[tuple[int, int], dict[str, Any]] = OrderedDict()
+
+    def add(self, topic: str, message: Any):
+        """Adds a received message and reports the sample it completes to the callback
+
+        Args:
+            topic (str): input name the message was received on
+            message (Any): received message, stamped with the time of its sample
+        """
+        stamp = (message.header.stamp.sec, message.header.stamp.nanosec)
+        messages = self.incomplete_samples.setdefault(stamp, {})
+        messages[topic] = message
+
+        if len(messages) == len(self.topics):
+            del self.incomplete_samples[stamp]
+            self.callback(*(messages[topic] for topic in self.topics))
+            return
+
+        # give up on the sample that has been waiting for its remaining inputs the longest
+        while len(self.incomplete_samples) > self.queue_size:
+            self.incomplete_samples.popitem(last=False)
 
 
 class AutonomyBenchmarks(Node):
@@ -204,11 +261,7 @@ class AutonomyBenchmarks(Node):
         # callback for dynamic parameter configuration
         self.add_on_set_parameters_callback(self.parameters_callback)
 
-        # TF listener setup
-        self.tf_buffer = tf2_ros.Buffer()
-        self.transform_listener = tf2_ros.TransformListener(self.tf_buffer, self)
-
-        self.data_subscriptions: dict[str, Optional[message_filters.Subscriber]] = {}
+        self.data_subscriptions: dict[str, Subscription] = {}
 
         # get handler for specified benchmark
         benchmark_handler = None
@@ -222,12 +275,18 @@ class AutonomyBenchmarks(Node):
             self.get_logger().fatal(f"Benchmark '{self.benchmark}' not recognized, exiting")
             raise SystemExit(1)
 
-        # create subscriptions for benchmark data inputs
+        # create subscriptions for benchmark data inputs, whose messages are matched into the
+        # samples to evaluate by their header stamp
+        self.message_synchronizer = SampleSynchronizer(
+            topics=list(benchmark_handler.required_inputs()),
+            callback=self.evaluate_sample,
+            queue_size=_SYNCHRONIZER_QUEUE_SIZE,
+        )
         for msg_topic, msg_type in benchmark_handler.required_inputs().items():
-            self.data_subscriptions[msg_topic] = message_filters.Subscriber(
-                self,
+            self.data_subscriptions[msg_topic] = self.create_subscription(
                 msg_type,
                 msg_topic,
+                partial(self.message_synchronizer.add, msg_topic),
                 qos_profile=QoSProfile(
                     reliability=ReliabilityPolicy.RELIABLE,
                     durability=DurabilityPolicy.VOLATILE,
@@ -235,12 +294,6 @@ class AutonomyBenchmarks(Node):
                     depth=10,
                 ),
             )
-
-        self.message_synchronizer = message_filters.TimeSynchronizer(
-            list(self.data_subscriptions.values()),
-            10,
-        )
-        self.message_synchronizer.registerCallback(self.evaluate_sample)
 
         # create publishers visualizing the benchmark's per-sample matching outcome
         self.visualization_publishers: dict[str, Publisher] = {}
