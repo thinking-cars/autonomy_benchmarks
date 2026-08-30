@@ -50,13 +50,15 @@ def _benchmark_of(samples) -> CountingBenchmark:
 class TestSampleResults:
     """Tests recording samples with the scene of the dataset they belong to."""
 
-    def test_records_sample_with_its_scene(self):
-        """A recorded sample keeps its ID, its scene and its metrics."""
-        benchmark = _benchmark_of([("0", "scene_a", 2, 3)])
-
-        assert benchmark.finalize()["sample_results"] == [
-            {"sample_id": "0", "scene_id": "scene_a", "metrics": {"num_predictions": 2, "num_labels": 3}}
-        ]
+    # The recorded samples themselves are no longer reported alongside the aggregated
+    # results, while 'sample_results' is commented out in AutonomyBenchmark.finalize()
+    # def test_records_sample_with_its_scene(self):
+    #     """A recorded sample keeps its ID, its scene and its metrics."""
+    #     benchmark = _benchmark_of([("0", "scene_a", 2, 3)])
+    #
+    #     assert benchmark.finalize()["sample_results"] == [
+    #         {"sample_id": "0", "scene_id": "scene_a", "metrics": {"num_predictions": 2, "num_labels": 3}}
+    #     ]
 
     def test_scene_can_be_set_after_the_sample_was_recorded(self):
         """An evaluation loop that learns the scene late sets it on the returned entry."""
@@ -91,11 +93,13 @@ class TestFinalize:
             "aggregated_metrics": {"num_predictions": 3, "num_labels": 4},
         }
         assert results["scene_results"]["scene_b"]["aggregated_metrics"] == {"num_predictions": 4, "num_labels": 5}
-        assert [entry["metrics"] for entry in results["sample_results"]] == [
-            {"num_predictions": 1, "num_labels": 1},
-            {"num_predictions": 2, "num_labels": 3},
-            {"num_predictions": 4, "num_labels": 5},
-        ]
+        # The metrics of the single samples are no longer reported alongside the aggregated
+        # results, while 'sample_results' is commented out in AutonomyBenchmark.finalize()
+        # assert [entry["metrics"] for entry in results["sample_results"]] == [
+        #     {"num_predictions": 1, "num_labels": 1},
+        #     {"num_predictions": 2, "num_labels": 3},
+        #     {"num_predictions": 4, "num_labels": 5},
+        # ]
 
     def test_groups_samples_of_a_scene_that_are_not_recorded_consecutively(self):
         """Samples are grouped by their scene, not by the order they were recorded in."""
@@ -140,7 +144,9 @@ class TestSaveResults:
         stored = json.loads(open(output_path).read())
         assert stored["aggregated_metrics"] == {"num_predictions": 3, "num_labels": 3}
         assert sorted(stored["scene_results"]) == ["scene_a", "scene_b"]
-        assert [entry["sample_id"] for entry in stored["sample_results"]] == ["0", "1"]
+        # The single samples are no longer written alongside the aggregated
+        # results, while 'sample_results' is commented out in AutonomyBenchmark.finalize()
+        # assert [entry["sample_id"] for entry in stored["sample_results"]] == ["0", "1"]
 
     def test_writes_previously_computed_results(self, tmp_path):
         """Results that have already been computed are written as they are."""
