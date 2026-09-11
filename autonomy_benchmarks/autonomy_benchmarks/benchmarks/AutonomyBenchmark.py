@@ -161,18 +161,27 @@ class AutonomyBenchmark(ABC):
                 scenes.setdefault(str(scene_id), []).append(entry)
         return scenes
 
-    def finalize(self) -> Dict[str, Any]:
+    def finalize(self, complete: bool = True) -> Dict[str, Any]:
         """Compute aggregated metrics and return the full results payload.
 
         Metrics are reported on three levels: ``aggregated_metrics`` over all
         evaluated samples, ``scene_results`` over the samples of each scene, and
         ``sample_results`` for every single sample.
+
+        Parameters
+        ----------
+        complete:
+            Whether all samples of the benchmark have been evaluated.  An
+            evaluation that was interrupted, e.g. with Ctrl-C, still reports the
+            samples it did evaluate, marked as ``"complete": false`` so that
+            they are not mistaken for the results over the whole dataset.
         """
         aggregated = self.compute_aggregated_metrics(self._sample_results)
         scenes = self.sample_results_by_scene()
         return {
             "benchmark": self.name,
             "description": self.description,
+            "complete": complete,
             "num_samples": len(self._sample_results),
             "num_scenes": len(scenes),
             "aggregated_metrics": aggregated,
@@ -187,7 +196,7 @@ class AutonomyBenchmark(ABC):
             # "sample_results": self._sample_results,
         }
 
-    def save_results(self, output_path: str, results: Optional[Dict[str, Any]] = None) -> str:
+    def save_results(self, output_path: str, results: Optional[Dict[str, Any]] = None, complete: bool = True) -> str:
         """Finalize and write results to a JSON file.
 
         Parameters
@@ -197,12 +206,16 @@ class AutonomyBenchmark(ABC):
         results:
             A results payload previously obtained from :meth:`finalize`, which
             is computed here when omitted.
+        complete:
+            Whether all samples of the benchmark have been evaluated, see
+            :meth:`finalize`.  Only used while the results are computed here; a
+            given payload is written with the flag it was finalized with.
 
         Returns
         -------
         The absolute path of the written file.
         """
-        results = self.finalize() if results is None else results
+        results = self.finalize(complete=complete) if results is None else results
         os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
         with open(output_path, "w") as fh:
             json.dump(results, fh, indent=2, default=str)

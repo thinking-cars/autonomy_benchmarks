@@ -5,9 +5,10 @@
 
 The node itself drives the evaluation via the ``request_samples`` service of the dataset and is
 covered by running it against a dataset. Tested here are the parsing of the samples to evaluate,
-as an unparsable value stops the node, and the matching of the received input messages into the
+as an unparsable value stops the node, the matching of the received input messages into the
 samples to evaluate, which has to hold up when the dataset continues with a scene that was
-recorded before the scene played before it.
+recorded before the scene played before it, and the finalization of the results, which reports
+the samples of an interrupted evaluation as incomplete.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from autonomy_benchmarks.autonomy_benchmarks import parse_sample_ids, SampleSynchronizer
+from autonomy_benchmarks.autonomy_benchmarks import AutonomyBenchmarks, parse_sample_ids, SampleSynchronizer
 
 _TOPICS = ["prediction", "label", "label_meta_info"]
 
@@ -133,3 +134,98 @@ class TestSampleSynchronizer:
 
         assert list(synchronizer.incomplete_samples) == _NEXT_SCENE[1:]
         assert matched_samples == []
+
+
+class _FakeLogger:
+    """Collect the messages the node logs instead of publishing them to ROS."""
+
+    def __init__(self):
+        """Start with an empty log."""
+        self.messages: list = []
+
+    def info(self, message: str, **kwargs) -> None:
+        """Record a logged message, whatever its severity."""
+        self.messages.append(message)
+
+    debug = warn = error = info
+
+
+class _FakeBenchmarkHandler:
+    """Stand in for the benchmark whose results the node aggregates and writes."""
+
+    def __init__(self):
+        """Start without finalized or written results."""
+        self.finalized_complete = None
+        self.written_results = None
+
+    def finalize(self, complete: bool = True) -> dict:
+        """Report results that are marked the way the node asked for."""
+        self.finalized_complete = complete
+        return {"num_samples": 2, "num_scenes": 1, "complete": complete, "aggregated_metrics": {}}
+
+    def save_results(self, output_path: str, results: dict = None) -> str:
+        """Keep the results instead of writing them to a file."""
+        self.written_results = results
+        return output_path
+
+
+def _node(num_evaluated_samples: int = 2, results_path: str = "/results/benchmark.json") -> SimpleNamespace:
+    """Stub the node state that finalizing a benchmark reads, without initializing ROS."""
+    return SimpleNamespace(
+        benchmark="counting",
+        benchmark_finished=False,
+        benchmark_handler=_FakeBenchmarkHandler(),
+        num_evaluated_samples=num_evaluated_samples,
+        results_path=results_path,
+        request_timer=SimpleNamespace(cancel=lambda: None),
+        get_logger=lambda logger=_FakeLogger(): logger,
+    )
+
+
+class TestFinalizeBenchmark:
+    """Tests reporting the results of a benchmark that ran to its end or was interrupted."""
+
+    def test_finished_benchmark_writes_complete_results(self):
+        """A benchmark that evaluated all its samples reports complete results."""
+        node = _node()
+
+        AutonomyBenchmarks.finalize_benchmark(node)
+
+        assert node.benchmark_handler.finalized_complete is True
+        assert node.benchmark_handler.written_results["complete"] is True
+
+    def test_interrupted_benchmark_writes_incomplete_results(self):
+        """An evaluation stopped before its last sample, e.g. with Ctrl-C, still writes its results."""
+        node = _node()
+
+        AutonomyBenchmarks.finalize_benchmark(node, complete=False)
+
+        assert node.benchmark_handler.finalized_complete is False
+        assert node.benchmark_handler.written_results["complete"] is False
+
+    def test_finished_benchmark_is_not_finalized_again_on_shutdown(self):
+        """Shutting down after the last sample must not overwrite the results with incomplete ones."""
+        node = _node()
+        AutonomyBenchmarks.finalize_benchmark(node)
+
+        AutonomyBenchmarks.finalize_benchmark(node, complete=False)
+
+        assert node.benchmark_handler.finalized_complete is True
+        assert node.benchmark_handler.written_results["complete"] is True
+
+    def test_interrupted_benchmark_without_samples_writes_nothing(self):
+        """An evaluation interrupted before its first sample has no results to write."""
+        node = _node(num_evaluated_samples=0)
+
+        AutonomyBenchmarks.finalize_benchmark(node, complete=False)
+
+        assert node.benchmark_handler.written_results is None
+
+    def test_results_are_only_logged_without_a_results_path(self):
+        """Without 'results_path' the interrupted results are logged instead of written."""
+        node = _node(results_path="")
+
+        AutonomyBenchmarks.finalize_benchmark(node, complete=False)
+
+        assert node.benchmark_handler.finalized_complete is False
+        assert node.benchmark_handler.written_results is None

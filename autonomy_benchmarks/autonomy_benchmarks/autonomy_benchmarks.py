@@ -12,6 +12,7 @@ import rclpy.exceptions
 from autonomy_datasets_msgs.srv import RequestSamples
 from rcl_interfaces.msg import FloatingPointRange, IntegerRange, ParameterDescriptor, SetParametersResult
 from rclpy.clock import Clock, ClockType
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.publisher import Publisher
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
@@ -456,12 +457,21 @@ class AutonomyBenchmarks(Node):
             else:
                 self.scenes_awaiting_sample.append(str(scene_id))
 
-    def finalize_benchmark(self):
+    def finalize_benchmark(self, complete: bool = True):
         """Aggregates the metrics of the evaluated samples per scene and over the whole benchmark
 
         The results hold the metrics of every single sample, of the samples of each scene, and of
-        all evaluated samples, of which the metrics over all samples are logged.
+        all evaluated samples, of which the metrics over all samples are logged. Calling this on a
+        benchmark that has already been finalized does nothing, so that a benchmark which ran to
+        its end is not finalized a second time when the node shuts down.
+
+        Args:
+            complete (bool, optional): whether all samples to evaluate have been processed; the
+                results of an evaluation that was interrupted before its last sample, e.g. with
+                Ctrl-C, are marked as incomplete via '"complete": false'
         """
+        if self.benchmark_finished:
+            return
         self.benchmark_finished = True
         self.request_timer.cancel()
 
@@ -469,19 +479,24 @@ class AutonomyBenchmarks(Node):
             self.get_logger().warn(f"Benchmark '{self.benchmark}' evaluated no sample, no metrics are aggregated")
             return
 
-        results = self.benchmark_handler.finalize()
+        results = self.benchmark_handler.finalize(complete=complete)
         aggregated_metrics = json.dumps(results["aggregated_metrics"], indent=2, default=str)
-        self.get_logger().info(
-            f"Benchmark '{self.benchmark}' finished after {results['num_samples']} evaluated sample(s) "
-            f"of {results['num_scenes']} scene(s)."
-        )
+        evaluated_samples = f"{results['num_samples']} evaluated sample(s) of {results['num_scenes']} scene(s)"
+        if complete:
+            self.get_logger().info(f"Benchmark '{self.benchmark}' finished after {evaluated_samples}.")
+        else:
+            self.get_logger().warn(
+                f"Benchmark '{self.benchmark}' was interrupted after {evaluated_samples}, "
+                "its results are marked as incomplete."
+            )
 
         if self.results_path:
+            reported_results = "benchmark results" if complete else "incomplete benchmark results"
             try:
                 results_path = self.benchmark_handler.save_results(self.results_path, results=results)
-                self.get_logger().info(f"Wrote benchmark results to '{results_path}'")
+                self.get_logger().info(f"Wrote {reported_results} to '{results_path}'")
             except OSError as exception:
-                self.get_logger().error(f"Failed to write benchmark results to '{self.results_path}': {exception}")
+                self.get_logger().error(f"Failed to write {reported_results} to '{self.results_path}': {exception}")
         else:
             self.get_logger().info(f"Aggregated dataset metrics:\n{aggregated_metrics}")
 
@@ -555,11 +570,17 @@ def main():
     node = AutonomyBenchmarks()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
-        node.destroy_node()
-        rclpy.try_shutdown()
+        # An evaluation that is stopped before its last sample, e.g. with Ctrl-C, still reports the
+        # samples it did evaluate, marked as incomplete results. A benchmark that ran to its end
+        # has been finalized already and is left untouched.
+        try:
+            node.finalize_benchmark(complete=False)
+        finally:
+            node.destroy_node()
+            rclpy.try_shutdown()
 
 
 if __name__ == "__main__":

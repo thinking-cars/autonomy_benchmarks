@@ -156,3 +156,39 @@ class TestSaveResults:
         output_path = benchmark.save_results(str(tmp_path / "counting.json"), results=results)
 
         assert json.loads(open(output_path).read())["aggregated_metrics"] == results["aggregated_metrics"]
+
+
+class TestIncompleteResults:
+    """Tests marking the results of an evaluation that did not process all samples."""
+
+    def test_results_of_all_samples_are_complete(self):
+        """Results aggregated after the last sample of the benchmark are marked as complete."""
+        assert _benchmark_of([("0", "scene_a", 1, 1)]).finalize()["complete"] is True
+
+    def test_interrupted_results_are_marked_incomplete(self):
+        """Results aggregated before the last sample, e.g. after Ctrl-C, are marked as incomplete."""
+        results = _benchmark_of([("0", "scene_a", 1, 1)]).finalize(complete=False)
+
+        assert results["complete"] is False
+        # the samples that were evaluated are still reported
+        assert results["num_samples"] == 1
+        assert results["aggregated_metrics"] == {"num_predictions": 1, "num_labels": 1}
+
+    def test_writes_incomplete_results_to_the_results_file(self, tmp_path):
+        """The results file of an interrupted evaluation marks the results it holds as incomplete."""
+        benchmark = _benchmark_of([("0", "scene_a", 1, 1)])
+
+        output_path = benchmark.save_results(str(tmp_path / "counting.json"), complete=False)
+
+        stored = json.loads(open(output_path).read())
+        assert stored["complete"] is False
+        assert stored["aggregated_metrics"] == {"num_predictions": 1, "num_labels": 1}
+
+    def test_written_results_keep_the_flag_they_were_finalized_with(self, tmp_path):
+        """A given payload is written as it is, marked the way it was finalized."""
+        benchmark = _benchmark_of([("0", "scene_a", 1, 1)])
+        results = benchmark.finalize(complete=False)
+
+        output_path = benchmark.save_results(str(tmp_path / "counting.json"), results=results)
+
+        assert json.loads(open(output_path).read())["complete"] is False
