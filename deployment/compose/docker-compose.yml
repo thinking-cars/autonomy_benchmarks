@@ -10,12 +10,12 @@ services:
       REQUEST_SAMPLES: ~/request_samples
       LOG_LEVEL: ${LOG_LEVEL:-info}
       USE_SIM_TIME: ${USE_SIM_TIME:-true}
-      BENCHMARK: ${BENCHMARK:-nuscenes_lidar_object_detection}
-      VISUALIZE: ${VISUALIZE:-false}
-      SAMPLES_PER_REQUEST: ${SAMPLES_PER_REQUEST:-1}
-      SAMPLE_IDS: ${SAMPLE_IDS:-}
-      EVALUATION_TIMEOUT: ${EVALUATION_TIMEOUT:-60.0}
-      RESULTS_PATH: ${RESULTS_PATH:-}
+      BENCHMARK: nuscenes_lidar_object_detection
+      VISUALIZE: false
+      SAMPLES_PER_REQUEST: 1
+      SAMPLE_IDS: ""
+      EVALUATION_TIMEOUT: 60.0
+      RESULTS_PATH: ""
     command:
       - /bin/bash
       - -ic
