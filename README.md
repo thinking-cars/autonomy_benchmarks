@@ -60,8 +60,10 @@ docker compose down
 Configure the benchmark task and dataset via ROS launch arguments in [docker-compose.yml](docker-compose.yml):
 
 ```yaml
-command: ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py benchmark:=nuscenes_lidar_object_detection prediction:=$your_prediction_topic label:=$your_label_topic visualize:=true
+command: ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py benchmark:=nuscenes_lidar_object_detection prediction:=$your_prediction_topic label:=$your_label_topic request_samples:=/datasets/request_samples visualize:=true
 ```
+
+The benchmark node requests the samples it evaluates from the dataset node via its `request_samples` service, which publishes them and responds once they have been published. The dataset therefore publishes the next sample only once the system under test has processed the current one. As soon as all samples have been published, the benchmark aggregates its metrics per sample, per scene of the dataset and over the whole benchmark. See the [node documentation](autonomy_benchmarks/README.md#autonomy_benchmarks) for the sample request settings and the results.
 
 ## 💻 Development
 
