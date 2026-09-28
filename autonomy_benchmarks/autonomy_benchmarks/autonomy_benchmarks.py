@@ -18,6 +18,7 @@ from rclpy.publisher import Publisher
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.subscription import Subscription
 from rclpy.task import Future
+from rclpy.timer import Timer
 
 # Interval in seconds at which the benchmark checks whether it can request further samples; the
 # benchmark also advances whenever a request is answered or a sample has been evaluated
@@ -119,6 +120,15 @@ class AutonomyBenchmarks(Node):
             param_type=rclpy.Parameter.Type.BOOL,
             description="publish the per-sample true positives, false positives and false negatives for RViz",
             default=False,
+        )
+
+        self.manual_playback = self.declare_and_load_parameter(
+            name="manual_playback",
+            param_type=rclpy.Parameter.Type.BOOL,
+            description="leave requesting the samples of the dataset to the user",
+            default=False,
+            add_to_auto_reconfigurable_params=False,
+            read_only=True,
         )
 
         self.samples_per_request = self.declare_and_load_parameter(
@@ -316,7 +326,6 @@ class AutonomyBenchmarks(Node):
         self.benchmark_handler = benchmark_handler
         self.input_topics: list = list(benchmark_handler.required_inputs().keys())
 
-        self.sample_request_client = self.create_client(RequestSamples, "~/request_samples")
         self.published_sample_ids: list[int] = []
         # A sample may already be evaluated before the dataset node answers the request that
         # published it, so published samples and evaluated samples are matched in publishing
@@ -329,6 +338,15 @@ class AutonomyBenchmarks(Node):
         self.publishing_finished = False
         self.benchmark_finished = False
         self.num_evaluated_samples = 0
+
+        if self.manual_playback:
+            self.request_timer: Optional[Timer] = None
+            if self.requested_sample_ids:
+                self.get_logger().warn("Parameter 'sample_ids' is ignored, as the samples are requested manually")
+            self.get_logger().info("Evaluating the samples requested manually, stop the node to report the results")
+            return
+
+        self.sample_request_client = self.create_client(RequestSamples, "~/request_samples")
         # driven by a steady clock, so that the benchmark also advances while the simulation clock
         # of the dataset stands still, i.e. while no sample is being published
         self.request_timer = self.create_timer(
@@ -473,7 +491,8 @@ class AutonomyBenchmarks(Node):
         if self.benchmark_finished:
             return
         self.benchmark_finished = True
-        self.request_timer.cancel()
+        if self.request_timer is not None:
+            self.request_timer.cancel()
 
         if not self.num_evaluated_samples:
             self.get_logger().warn(f"Benchmark '{self.benchmark}' evaluated no sample, no metrics are aggregated")
@@ -542,11 +561,13 @@ class AutonomyBenchmarks(Node):
         result = self.benchmark_handler.record_sample(sample_id=sample_id, **messages)
         self.num_evaluated_samples += 1
         # attribute the sample to the scene the dataset published it from, which the dataset may
-        # only report after the sample has been evaluated
-        if self.scenes_awaiting_sample:
-            result["scene_id"] = self.scenes_awaiting_sample.popleft()
-        else:
-            self.samples_awaiting_scene.append(result)
+        # only report after the sample has been evaluated; with the playback controlled manually,
+        # the scene is only reported to the playback panel
+        if not self.manual_playback:
+            if self.scenes_awaiting_sample:
+                result["scene_id"] = self.scenes_awaiting_sample.popleft()
+            else:
+                self.samples_awaiting_scene.append(result)
         # a system under test that needs longer for some samples must not run into the timeout,
         # which therefore restarts with every evaluated sample
         self.evaluation_deadline = time.monotonic() + self.evaluation_timeout
@@ -559,8 +580,10 @@ class AutonomyBenchmarks(Node):
             for msg_topic, publisher in self.visualization_publishers.items():
                 publisher.publish(visualization[msg_topic])
 
-        # request the next samples, or aggregate the dataset metrics if this was the last one
-        self.advance_benchmark()
+        # request the next samples, or aggregate the dataset metrics if this was the last one; with
+        # the playback controlled manually, the user requests the next samples instead
+        if not self.manual_playback:
+            self.advance_benchmark()
 
 
 def main():

@@ -31,12 +31,23 @@ ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py \
   results_path:=/results/nuscenes_lidar_object_detection.json
 ```
 
+To look at the samples one by one, set `manual_playback` together with `visualize`. The node then requests no samples itself, and the samples are published with the [playback panel](https://github.com/thinking-cars/autonomy_datasets/blob/main/autonomy_datasets_rviz_plugins/README.md) in RViz instead, whose _Service_ field has to name the `request_samples` service of the dataset node (`/datasets/request_samples` by default). Every sample that arrives is evaluated and shown in RViz, and `samples_per_request`, `sample_ids` and `evaluation_timeout` have no effect. As the responses of the dataset only reach the panel, the node neither learns the scenes of the samples, so `scene_results` stays empty, nor when the dataset has ended: the results of the evaluated samples are reported once the node is stopped, e.g. with Ctrl-C, and are marked as incomplete.
+
+```bash
+ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py \
+  prediction:=/object_list/prediction \
+  label:=/object_list/lidar_01 \
+  visualize:=true \
+  manual_playback:=true
+```
+
 #### Parameters
 
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
 | `benchmark` | `string` | `nuscenes_lidar_object_detection` | benchmark name |
 | `visualize` | `bool` | `false` | publish the per-sample true positives, false positives and false negatives for RViz |
+| `manual_playback` | `bool` | `false` | leave requesting the samples of the dataset to the user, via the playback panel in RViz, instead of requesting them one after another; the results are reported once the node is stopped |
 | `samples_per_request` | `int` | `1` | number of samples to request from the dataset at a time; 0 requests all remaining samples at once, 1 evaluates every sample before the next one is published |
 | `sample_ids` | `string` | - | comma-separated IDs of the dataset samples to evaluate (e.g. '0,10,20'); if empty, all samples of the dataset are evaluated |
 | `evaluation_timeout` | `float` | `60.0` | seconds to wait for a published sample to be evaluated before continuing without it |
@@ -55,6 +66,7 @@ ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py \
 | `log_level` | `"info"` | ros logging level |
 | `use_sim_time` | `"true"` | use sim time |
 | `visualize` | `"false"` | publish the per-sample true positives, false positives and false negatives and open RViz |
+| `manual_playback` | `"false"` | request the samples to evaluate via the playback panel in RViz instead of one after another, and open RViz on it |
 | `samples_per_request` | `"1"` | number of samples to request from the dataset at a time (0 requests all remaining samples at once) |
 | `sample_ids` | `""` | comma-separated IDs of the dataset samples to evaluate (all samples if empty) |
 | `evaluation_timeout` | `"60.0"` | seconds to wait for a published sample to be evaluated before continuing without it |

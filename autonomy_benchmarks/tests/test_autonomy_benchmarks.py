@@ -7,12 +7,14 @@ The node itself drives the evaluation via the ``request_samples`` service of the
 covered by running it against a dataset. Tested here are the parsing of the samples to evaluate,
 as an unparsable value stops the node, the matching of the received input messages into the
 samples to evaluate, which has to hold up when the dataset continues with a scene that was
-recorded before the scene played before it, and the finalization of the results, which reports
-the samples of an interrupted evaluation as incomplete.
+recorded before the scene played before it, the evaluation of a sample, which requests the next
+samples unless the user controls the playback manually, and the finalization of the results,
+which reports the samples of an interrupted evaluation as incomplete.
 """
 
 from __future__ import annotations
 
+from collections import deque
 from types import SimpleNamespace
 
 import pytest
@@ -169,6 +171,71 @@ class _FakeBenchmarkHandler:
         return output_path
 
 
+class _RecordingBenchmarkHandler:
+    """Stand in for the benchmark that records the samples the node evaluates."""
+
+    def __init__(self):
+        """Start without recorded samples."""
+        self.recorded_samples: list = []
+
+    def record_sample(self, sample_id: str, **messages) -> dict:
+        """Record a sample the way the benchmark stores it, still without a scene."""
+        entry = {"sample_id": sample_id, "scene_id": None, "metrics": {}}
+        self.recorded_samples.append(entry)
+        return entry
+
+
+def _evaluating_node(manual_playback: bool) -> SimpleNamespace:
+    """Stub the node state that evaluating a sample reads, counting the attempts to continue the benchmark."""
+    node = SimpleNamespace(
+        manual_playback=manual_playback,
+        input_topics=_TOPICS,
+        benchmark_handler=_RecordingBenchmarkHandler(),
+        num_evaluated_samples=0,
+        scenes_awaiting_sample=deque(),
+        samples_awaiting_scene=deque(),
+        evaluation_timeout=60.0,
+        evaluation_deadline=None,
+        results_path="",
+        visualization_publishers={},
+        num_advances=0,
+        get_logger=lambda logger=_FakeLogger(): logger,
+    )
+    node.advance_benchmark = lambda: setattr(node, "num_advances", node.num_advances + 1)
+    return node
+
+
+def _sample_messages(stamp: tuple[int, int]) -> tuple:
+    """Fake the synchronized input messages of one sample, in the order of the inputs."""
+    return tuple(_message(stamp) for _ in _TOPICS)
+
+
+class TestEvaluateSample:
+    """Tests evaluating a sample with the playback driven by the benchmark or by the user in RViz."""
+
+    def test_benchmark_requests_the_next_samples_after_evaluating_one(self):
+        """Without manual playback, the benchmark continues with the next samples on its own."""
+        node = _evaluating_node(manual_playback=False)
+
+        AutonomyBenchmarks.evaluate_sample(node, *_sample_messages(_NEXT_SCENE[0]))
+
+        assert node.num_advances == 1
+        # the dataset reports the scene of the sample with the response to the request
+        assert list(node.samples_awaiting_scene) == node.benchmark_handler.recorded_samples
+
+    def test_manual_playback_leaves_requesting_samples_to_the_user(self):
+        """With manual playback, samples are evaluated as they arrive, without requesting further ones."""
+        node = _evaluating_node(manual_playback=True)
+
+        for stamp in _NEXT_SCENE:
+            AutonomyBenchmarks.evaluate_sample(node, *_sample_messages(stamp))
+
+        assert node.num_evaluated_samples == len(_NEXT_SCENE)
+        assert node.num_advances == 0
+        # the scenes are only reported to the playback panel, so no sample waits for one
+        assert not node.samples_awaiting_scene
+
+
 def _node(num_evaluated_samples: int = 2, results_path: str = "/results/benchmark.json") -> SimpleNamespace:
     """Stub the node state that finalizing a benchmark reads, without initializing ROS."""
     return SimpleNamespace(
@@ -212,6 +279,15 @@ class TestFinalizeBenchmark:
 
         assert node.benchmark_handler.finalized_complete is True
         assert node.benchmark_handler.written_results["complete"] is True
+
+    def test_manual_playback_writes_its_results_when_stopped(self):
+        """With manual playback, which runs no request timer, the results are written once the node is stopped."""
+        node = _node()
+        node.request_timer = None
+
+        AutonomyBenchmarks.finalize_benchmark(node, complete=False)
+
+        assert node.benchmark_handler.written_results["complete"] is False
 
     def test_interrupted_benchmark_without_samples_writes_nothing(self):
         """An evaluation interrupted before its first sample has no results to write."""

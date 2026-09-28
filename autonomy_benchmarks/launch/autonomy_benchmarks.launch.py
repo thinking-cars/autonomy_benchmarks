@@ -59,6 +59,13 @@ def generate_launch_description():
             description="publish the per-sample true positives, false positives and false negatives and open RViz on them",
         ),
         DeclareLaunchArgument(
+            "manual_playback",
+            default_value="false",
+            choices=["true", "false"],
+            description="request the samples to evaluate via the playback panel in RViz instead of one after another, "
+            "and open RViz on it",
+        ),
+        DeclareLaunchArgument(
             "samples_per_request",
             default_value="1",
             description="number of samples to request from the dataset at a time (0 requests all remaining samples at once)",
@@ -104,6 +111,7 @@ def generate_launch_description():
         parameters=[
             {"benchmark": LaunchConfiguration("benchmark")},
             {"visualize": ParameterValue(LaunchConfiguration("visualize"), value_type=bool)},
+            {"manual_playback": ParameterValue(LaunchConfiguration("manual_playback"), value_type=bool)},
             {"samples_per_request": ParameterValue(LaunchConfiguration("samples_per_request"), value_type=int)},
             {"sample_ids": ParameterValue(LaunchConfiguration("sample_ids"), value_type=str)},
             {"evaluation_timeout": ParameterValue(LaunchConfiguration("evaluation_timeout"), value_type=float)},
