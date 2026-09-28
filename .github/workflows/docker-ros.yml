@@ -22,7 +22,7 @@ jobs:
           target: dev,run
           base-image: rwthika/ros2:jazzy
           rmw-implementation: rmw_zenoh_cpp
-          command: ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py
+          command: ros2 launch autonomy_evaluation autonomy_evaluation.launch.py
           enable-slim: false
         env:
           TARGET_CMAKE_ARGS: -DCMAKE_EXPORT_COMPILE_COMMANDS=1

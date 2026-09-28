@@ -1,15 +1,15 @@
-name: ${USER}-autonomy-benchmarks
+name: ${USER}-autonomy-evaluation
 
 services:
 
-  autonomy_benchmarks:
-    image: ghcr.io/thinking-cars/autonomy_benchmarks:latest
+  autonomy_evaluation:
+    image: ghcr.io/thinking-cars/autonomy_evaluation:latest
     command:
       - /bin/bash
       - -ic
       - |
-        ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py \
-          benchmark:=nuscenes_lidar_object_detection \
+        ros2 launch autonomy_evaluation autonomy_evaluation.launch.py \
+          evaluation:=nuscenes_lidar_object_detection \
           prediction:=/object_list/prediction \
           label:=/object_list/lidar_01 \
           request_samples:=/datasets/request_samples \
@@ -49,7 +49,7 @@ services:
       - ./config/params_nuscenes.yml:/params_nuscenes.yml
       - $DATASET_DIR:/datasets
     depends_on:
-      - autonomy_benchmarks
+      - autonomy_evaluation
 
   autoware_lidar_centerpoint:
     profiles:

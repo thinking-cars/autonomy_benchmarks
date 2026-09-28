@@ -1,15 +1,15 @@
 openadservice:
-  name: autonomy-benchmarks
-  image: ghcr.io/thinking-cars/autonomy_benchmarks:v1.0.0
+  name: autonomy-evaluation
+  image: ghcr.io/thinking-cars/autonomy_evaluation:v1.0.0
   env:
     # --- name ------
     NAMESPACE: /
-    NAME: autonomy_benchmarks
+    NAME: autonomy_evaluation
     # --- other -----
     REQUEST_SAMPLES: ~/request_samples
     LOG_LEVEL: info
     USE_SIM_TIME: true
-    BENCHMARK: nuscenes_lidar_object_detection
+    EVALUATION: nuscenes_lidar_object_detection
     VISUALIZE: false
     MANUAL_PLAYBACK: false
     SAMPLES_PER_REQUEST: 1
@@ -20,12 +20,12 @@ openadservice:
   - /bin/bash
   - -ic
   - |
-    ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py \
+    ros2 launch autonomy_evaluation autonomy_evaluation.launch.py \
       namespace:=${NAMESPACE} \
       name:=${NAME} \
       log_level:=${LOG_LEVEL} \
       use_sim_time:=${USE_SIM_TIME} \
-      benchmark:=${BENCHMARK} \
+      evaluation:=${EVALUATION} \
       visualize:=${VISUALIZE} \
       manual_playback:=${MANUAL_PLAYBACK} \
       samples_per_request:=${SAMPLES_PER_REQUEST} \

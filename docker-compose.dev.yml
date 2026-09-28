@@ -1,12 +1,12 @@
-name: ${USER}-autonomy-benchmarks
+name: ${USER}-autonomy-evaluation
 
 services:
 
-  autonomy_benchmarks:
+  autonomy_evaluation:
     extends:
       file: docker-compose.yml
-      service: autonomy_benchmarks
-    image: ghcr.io/thinking-cars/autonomy_benchmarks:latest-dev
+      service: autonomy_evaluation
+    image: ghcr.io/thinking-cars/autonomy_evaluation:latest-dev
     command: sleep infinity
     volumes:
       - .:/docker-ros/ws/src/target

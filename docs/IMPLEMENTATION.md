@@ -1,6 +1,6 @@
 # Implementation Details
 
-This repository supports the following benchmarks for object detection in automated driving systems:
+This repository supports the following evaluations of object detection in automated driving systems:
 
 - [nuScenes Challenge](#nuscenes-challenge): 3D lidar object detection
 
@@ -16,7 +16,7 @@ Supported Datasets:
 
 - [nuScenes Dataset](https://github.com/thinking-cars/autonomy_datasets/blob/main/docs/IMPLEMENTATION.md#nuscenes-dataset)
 
-> This benchmark uses [nuScenes Dataset](https://github.com/thinking-cars/autonomy_datasets/blob/main/docs/IMPLEMENTATION.md#nuscenes-dataset) via the [autonomy_datasets](https://github.com/thinking-cars/autonomy_datasets) ROS package.
+> This evaluation uses [nuScenes Dataset](https://github.com/thinking-cars/autonomy_datasets/blob/main/docs/IMPLEMENTATION.md#nuscenes-dataset) via the [autonomy_datasets](https://github.com/thinking-cars/autonomy_datasets) ROS package.
 
 [![3D Object Detection Challenge](https://img.shields.io/badge/origin-3D_Object_Detection_Challenge-green)](https://www.nuscenes.org/object-detection) ![2019](https://img.shields.io/badge/published-2019-green)
 
@@ -99,14 +99,14 @@ Metrics are computed based on the following assumptions:
 
 </details>
 
-### Adding more Benchmarks
+### Adding more Evaluations
 
-To contribute a new benchmark for a dataset or evaluation protocol:
+To contribute a new evaluation for a dataset or evaluation protocol:
 
-1. Create a new benchmark class in [autonomy_benchmarks/benchmarks/](../autonomy_benchmarks/autonomy_benchmarks/benchmarks/) that inherits from `AutonomyBenchmark`.
+1. Create a new evaluation class in [autonomy_evaluation/evaluations/](../autonomy_evaluation/autonomy_evaluation/evaluations/) that inherits from `Evaluation`.
 2. Implement the three abstract methods: `required_inputs()`, `compute_sample_metrics()`, and `compute_aggregated_metrics()`.
-3. Configure the benchmark in `__init__` (thresholds, per-class ranges, and metric rules as instance attributes); keep static lookup tables (e.g. category-to-class mappings) as module-level `_CONSTANT_NAME` constants.
-4. Register the benchmark in the node's handler dispatch in [autonomy_benchmarks.py](../autonomy_benchmarks/autonomy_benchmarks/autonomy_benchmarks.py) so it can be selected via the `benchmark:=<name>` launch argument.
-5. Add comprehensive tests in [tests/benchmarks/](../autonomy_benchmarks/tests/benchmarks/) following existing test patterns.
-6. Update documentation with benchmark details, metrics table, and dataset requirements.
-7. Create a [Pull Request](https://github.com/thinking-cars/autonomy_benchmarks-internal/pulls) on GitHub and wait for maintainer feedback.
+3. Configure the evaluation in `__init__` (thresholds, per-class ranges, and metric rules as instance attributes); keep static lookup tables (e.g. category-to-class mappings) as module-level `_CONSTANT_NAME` constants.
+4. Register the evaluation in the node's handler dispatch in [autonomy_evaluation.py](../autonomy_evaluation/autonomy_evaluation/autonomy_evaluation.py) so it can be selected via the `evaluation:=<name>` launch argument.
+5. Add comprehensive tests in [tests/evaluations/](../autonomy_evaluation/tests/evaluations/) following existing test patterns.
+6. Update documentation with evaluation details, metrics table, and dataset requirements.
+7. Create a [Pull Request](https://github.com/thinking-cars/autonomy_evaluation/pulls) on GitHub and wait for maintainer feedback.
