@@ -22,7 +22,7 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix
 
   autonomy_datasets:
-    image: ghcr.io/thinking-cars/autonomy_datasets:latest
+    image: ghcr.io/thinking-cars/autonomy_datasets:v1.6.0
     command:
       - /bin/bash
       - -ic
