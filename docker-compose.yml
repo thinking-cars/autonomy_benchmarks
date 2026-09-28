@@ -32,6 +32,7 @@ services:
           config:=/params_nuscenes.yml \
           wait_for_ack:=true \
           start_paused:=true \
+          target_frame_rate:=0.0 \
           rviz:=no
     environment:
       RMW_IMPLEMENTATION: rmw_fastrtps_cpp
