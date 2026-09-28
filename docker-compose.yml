@@ -16,11 +16,22 @@ services:
           visualize:=true \
           results_path:=results.json
     environment:
-      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
-      DISPLAY: ${DISPLAY:-""}
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - DISPLAY=${DISPLAY:-""}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - __NV_PRIME_RENDER_OFFLOAD=1
+      - __GLX_VENDOR_LIBRARY_NAME=nvidia
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
-
+    deploy:
+      resources:
+          reservations:
+            devices:
+              - driver: nvidia
+                count: all
+                capabilities: [gpu]
+  
   autonomy_datasets:
     image: ghcr.io/thinking-cars/autonomy_datasets:v1.6.0
     command:
