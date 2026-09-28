@@ -21,6 +21,7 @@
   <depend>python3-shapely</depend>
   <depend>rclpy</depend>
 
+  <exec_depend>autonomy_datasets_rviz_plugins</exec_depend>
   <exec_depend>perception_msgs_rviz_plugins</exec_depend>
   <exec_depend>rviz2</exec_depend>
 
