@@ -11,6 +11,7 @@ openadservice:
     USE_SIM_TIME: true
     BENCHMARK: nuscenes_lidar_object_detection
     VISUALIZE: false
+    MANUAL_PLAYBACK: false
     SAMPLES_PER_REQUEST: 1
     SAMPLE_IDS: 
     EVALUATION_TIMEOUT: 60.0
@@ -26,6 +27,7 @@ openadservice:
       use_sim_time:=${USE_SIM_TIME} \
       benchmark:=${BENCHMARK} \
       visualize:=${VISUALIZE} \
+      manual_playback:=${MANUAL_PLAYBACK} \
       samples_per_request:=${SAMPLES_PER_REQUEST} \
       ${SAMPLE_IDS:+sample_ids:=${SAMPLE_IDS}} \
       evaluation_timeout:=${EVALUATION_TIMEOUT} \

@@ -41,13 +41,26 @@ ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py \
   manual_playback:=true
 ```
 
+```mermaid
+flowchart LR
+    NODE("autonomy_benchmarks")
+    NODE o--o|~/request_samples| SC0:::hidden
+    classDef hidden display: none;
+```
+
+#### Service Clients
+
+| Service | Type | Description |
+| --- | --- | --- |
+| `~/request_samples` | `autonomy_datasets_msgs/srv/RequestSamples` | request samples from dataset |
+
 #### Parameters
 
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
 | `benchmark` | `string` | `nuscenes_lidar_object_detection` | benchmark name |
 | `visualize` | `bool` | `false` | publish the per-sample true positives, false positives and false negatives for RViz |
-| `manual_playback` | `bool` | `false` | leave requesting the samples of the dataset to the user, via the playback panel in RViz, instead of requesting them one after another; the results are reported once the node is stopped |
+| `manual_playback` | `bool` | `false` | leave requesting the samples of the dataset to the user |
 | `samples_per_request` | `int` | `1` | number of samples to request from the dataset at a time; 0 requests all remaining samples at once, 1 evaluates every sample before the next one is published |
 | `sample_ids` | `string` | - | comma-separated IDs of the dataset samples to evaluate (e.g. '0,10,20'); if empty, all samples of the dataset are evaluated |
 | `evaluation_timeout` | `float` | `60.0` | seconds to wait for a published sample to be evaluated before continuing without it |
