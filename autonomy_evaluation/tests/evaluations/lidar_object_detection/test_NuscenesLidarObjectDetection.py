@@ -428,6 +428,27 @@ class TestNuscenesLidarObjectDetection:
         merged = self.bm._merge_match_records([r1["metrics"]["match_records"], r2["metrics"]["match_records"]])
         assert merged[0.5]["car"]["gt_count"] == 2
 
+    # --- topics ---
+
+    def test_compares_the_predictions_with_the_labels_as_ground_truth(self):
+        """The prediction of the detector is evaluated against the labels and their meta information."""
+        assert self.bm.required_inputs() == {"prediction": ObjectList}
+        assert self.bm.required_ground_truth() == {"label": ObjectList, "label_meta_info": ObjectListMetaInfo}
+
+    def test_label_meta_info_follows_the_label_topic(self):
+        """The dataset publishes the meta information next to the labels, on '<label topic>/meta_info'."""
+        assert self.bm.derived_topics() == {"label_meta_info": ("label", "/meta_info")}
+
+    def test_sample_metrics_are_computed_from_the_messages_by_topic_name(self):
+        """The node passes the messages of a sample by the names of their topics."""
+        label, label_meta_info = _label([_gt(x=0.0, num_lidar_pts=5)])
+
+        prediction = _msg([_pred(x=0.0)])
+
+        result = self.bm.record_sample(sample_id="0", prediction=prediction, label=label, label_meta_info=label_meta_info)
+
+        assert result["metrics"]["sample_ground_truth_num"] == 1
+
     # --- visualization of the per-sample matching outcome ---
 
     def test_visualization_outputs_are_object_lists(self):

@@ -250,25 +250,43 @@ class NuscenesLidarObjectDetection(Evaluation):
     # ------------------------------------------------------------------
 
     def required_inputs(self) -> Dict[str, Any]:
-        """Define expected input ROS message types.
-
-        ``label_meta_info`` carries the dataset annotations of the ``label``
-        object list (``original_class``, ``attribute``, point counts). The
-        dataset publishes it next to the object list, on
-        ``<label topic>/meta_info``, so the launch file derives its topic from
-        the ``label`` argument instead of exposing one of its own.
+        """Define the evaluated output of the system under test.
 
         Returns:
-            Input name to ROS message type. The keys match the
-            ``compute_sample_metrics`` parameters and are remapped to real ROS
-            topics in the launch file.
+            Input name to ROS message type: the ``prediction`` object list of
+            the detector, matching the ``compute_sample_metrics`` parameter.
+        """
+
+        return {"prediction": ObjectList}
+
+    def required_ground_truth(self) -> Dict[str, Any]:
+        """Define the dataset labels the predictions are compared with.
+
+        ``label_meta_info`` carries the dataset annotations of the ``label``
+        object list (``original_class``, ``attribute``, point counts).
+
+        Returns:
+            Ground-truth name to ROS message type, matching the
+            ``compute_sample_metrics`` parameters.
         """
 
         return {
-            "prediction": ObjectList,
             "label": ObjectList,
             "label_meta_info": ObjectListMetaInfo,
         }
+
+    def derived_topics(self) -> Dict[str, Tuple[str, str]]:
+        """Follow the topic of the labels with the topic of their meta information.
+
+        The dataset publishes the meta information of an object list next to
+        it, on ``<label topic>/meta_info``, so only the ``label`` topic needs
+        to be configured.
+
+        Returns:
+            ``label_meta_info`` derived from ``label`` with suffix ``/meta_info``.
+        """
+
+        return {"label_meta_info": ("label", "/meta_info")}
 
     @staticmethod
     def _index_meta_info(meta_info: Any) -> Dict[int, Dict[str, List[str]]]:

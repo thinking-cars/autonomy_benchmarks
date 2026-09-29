@@ -14,9 +14,10 @@
 
 > This repository is part of the **Autonomy.Benchmarks** suite of the **Autonomy.Hub Ecosystem**
 
-Within the Autonomy.Benchmarks suite, **Autonomy.Evaluation** generates the metrics-based evidence for benchmarking automated driving deployments. It evaluates the output of a system under test on the samples replayed by [Autonomy.Datasets](https://github.com/thinking-cars/autonomy_datasets) and reports the resulting metrics per scene and over all evaluated samples:
+Within the Autonomy.Benchmarks suite, **Autonomy.Evaluation** generates the metrics-based evidence for benchmarking automated driving deployments. It evaluates arbitrary ROS systems under test, either from their own topics alone, e.g. a closed-loop planner by its time to collision, or against ground truth, e.g. a perception algorithm against the labels of a dataset replayed by [Autonomy.Datasets](https://github.com/thinking-cars/autonomy_datasets), and reports the resulting metrics per scene and over all evaluated samples:
 
-- 🔄 **Unified ROS 2 Interface**: Evaluate systems under test on multiple datasets using the benefits of the ROS 2 ecosystem
+- 🔄 **Unified ROS 2 Interface**: Evaluate any ROS system under test, on datasets, in simulation or live, using the benefits of the ROS 2 ecosystem
+- 🧩 **Pluggable Evaluations**: Select an evaluation by name, or bring your own from another package, reading any topics as inputs and, where needed, ground truth
 - 📊 **Established Metrics**: Use the provided evaluations, which follow the protocols of established challenges, with [Autonomy.Datasets](https://github.com/thinking-cars/autonomy_datasets) across different automated driving tasks
 - ⚡ **Efficient Data Pipeline**: Works seamlessly with preprocessed Rosbag files from [Autonomy.Datasets](https://github.com/thinking-cars/autonomy_datasets) for fast execution during development
 - 🐳 **Dockerized Environment**: Reproducible setup with all dependencies included
@@ -63,7 +64,7 @@ Configure the evaluation and dataset via ROS launch arguments in [docker-compose
 command: ros2 launch autonomy_evaluation autonomy_evaluation.launch.py evaluation:=nuscenes_lidar_object_detection prediction:=$your_prediction_topic label:=$your_label_topic request_samples:=/datasets/request_samples visualize:=true
 ```
 
-The evaluation node requests the samples it evaluates from the dataset node via its `request_samples` service, which publishes them and responds once they have been published. The dataset therefore publishes the next sample only once the system under test has processed the current one. As soon as all samples have been published, the node aggregates its metrics per scene of the dataset and over all evaluated samples. See the [node documentation](autonomy_evaluation/README.md#autonomy_evaluation) for the sample request settings and the results.
+The evaluation node requests the samples it evaluates from the dataset node via its `request_samples` service, which publishes them and responds once they have been published. The dataset therefore publishes the next sample only once the system under test has processed the current one. As soon as all samples have been published, the node aggregates its metrics per scene of the dataset and over all evaluated samples. To evaluate samples published by others instead, e.g. by a closed-loop simulation, set `sample_source:=external`. See the [node documentation](autonomy_evaluation/README.md#autonomy_evaluation) for the topics of the evaluations, the sample settings and the results.
 
 ## 💻 Development
 

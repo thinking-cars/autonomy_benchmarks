@@ -12,7 +12,8 @@ services:
       USE_SIM_TIME: ${USE_SIM_TIME:-true}
       EVALUATION: nuscenes_lidar_object_detection
       VISUALIZE: false
-      MANUAL_PLAYBACK: false
+      SAMPLE_SOURCE: dataset
+      SYNC_TOLERANCE: 0.0
       SAMPLES_PER_REQUEST: 1
       SAMPLE_IDS: ""
       EVALUATION_TIMEOUT: 60.0
@@ -28,7 +29,8 @@ services:
           use_sim_time:=$${USE_SIM_TIME} \
           evaluation:=$${EVALUATION} \
           visualize:=$${VISUALIZE} \
-          manual_playback:=$${MANUAL_PLAYBACK} \
+          sample_source:=$${SAMPLE_SOURCE} \
+          sync_tolerance:=$${SYNC_TOLERANCE} \
           samples_per_request:=$${SAMPLES_PER_REQUEST} \
           $${SAMPLE_IDS:+sample_ids:=$${SAMPLE_IDS}} \
           evaluation_timeout:=$${EVALUATION_TIMEOUT} \

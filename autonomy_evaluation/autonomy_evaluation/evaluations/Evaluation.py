@@ -3,9 +3,12 @@
 
 """Abstract base class for all evaluations of automated driving tasks.
 
-Each evaluation defines how to compute per-sample and aggregated metrics for a
-specific perception task (e.g. 2-D / 3-D object detection).  Concrete
-subclasses must override the abstract methods.
+Each evaluation defines which topics it reads and how to compute per-sample and
+aggregated metrics from their messages.  An evaluation may read the topics of a
+system under test only, e.g. the ego state and the surrounding objects of a
+closed-loop planner to compute its time to collision, or compare them with
+ground-truth topics, e.g. the predictions of a perception algorithm with the
+labels of a dataset.  Concrete subclasses must override the abstract methods.
 """
 
 from __future__ import annotations
@@ -13,17 +16,23 @@ from __future__ import annotations
 import json
 import os
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class Evaluation(ABC):
     """Meta-class (abstract base class) for the evaluations of automated driving tasks.
 
     An evaluation is responsible for:
-    * extracting the model input from a dataset sample,
-    * computing per-sample metrics from a prediction and the ground-truth label,
+    * declaring the topics it reads, split into the inputs from the system
+      under test and, if it compares them with a reference, the ground truth,
+    * computing per-sample metrics from the messages of these topics,
     * aggregating per-sample metrics into scene-level and dataset-level metrics,
     * persisting results to JSON.
+
+    The messages of all topics that belong to the same sample are passed to
+    :meth:`compute_sample_metrics` as keyword arguments named after the topics
+    (see :meth:`all_inputs`), so an implementation names its parameters like
+    its topics.
     """
 
     def __init__(self, name: str, description: str = "") -> None:
@@ -38,25 +47,61 @@ class Evaluation(ABC):
 
     @abstractmethod
     def required_inputs(self) -> Dict[str, Any]:
-        """Define expected input ROS message types.
+        """Define the topics of the system under test that are evaluated.
+
+        These are the outputs of the system under test, e.g. the predictions
+        of a perception algorithm, and, for an evaluation that needs no
+        reference, the topics of the scenario it runs in, e.g. the ego state
+        and the surrounding objects a closed-loop planner is evaluated on.
 
         Returns
         -------
-        A dictionary mapping topic names to their expected message types.
+        A dictionary mapping input names to their ROS message types.  The
+        names are the keyword arguments of :meth:`compute_sample_metrics`
+        and the node-relative topics the node subscribes to.
         """
 
+    def required_ground_truth(self) -> Dict[str, Any]:
+        """Define the ground-truth topics the inputs are compared with.
+
+        Ground truth is a reference the output of the system under test is
+        measured against, e.g. the labels of a dataset.  An evaluation that
+        computes its metrics from the inputs alone needs none.
+
+        Returns
+        -------
+        A dictionary mapping ground-truth names to their ROS message types,
+        empty by default.  The names are used like those of
+        :meth:`required_inputs`.
+        """
+        return {}
+
+    def derived_topics(self) -> Dict[str, Tuple[str, str]]:
+        """Define the inputs that are published next to the topic of another input.
+
+        A topic that is published next to another one, e.g. the meta
+        information of an object list on ``<object list topic>/meta_info``,
+        follows that topic instead of having to be configured on its own.
+
+        Returns
+        -------
+        A dictionary mapping the name of such an input to the name of the
+        input it is published next to and the suffix appended to that
+        input's topic, empty by default.
+        """
+        return {}
+
     @abstractmethod
-    def compute_sample_metrics(self, prediction: Any, label: Any, sample_id: Optional[str] = None) -> Dict[str, Any]:
-        """Compute metrics for a single (prediction, label) pair.
+    def compute_sample_metrics(self, sample_id: Optional[str] = None, **messages: Any) -> Dict[str, Any]:
+        """Compute metrics for a single sample.
 
         Parameters
         ----------
-        prediction:
-            The model's output for one sample.
-        label:
-            The ground-truth for the same sample.
         sample_id:
             An optional identifier for the sample.
+        messages:
+            One message per topic of :meth:`all_inputs`, passed by the name
+            of its topic.
 
         Returns
         -------
@@ -80,6 +125,37 @@ class Evaluation(ABC):
         """
 
     # ------------------------------------------------------------------
+    # Topics
+    # ------------------------------------------------------------------
+
+    def all_inputs(self) -> Dict[str, Any]:
+        """Combine the inputs and the ground truth into the topics the evaluation reads.
+
+        Returns
+        -------
+        A dictionary mapping the names of the inputs, followed by those of the
+        ground truth, to their ROS message types.
+
+        Raises
+        ------
+        ValueError
+            If the evaluation reads no topic, an input and a ground-truth topic
+            share a name, or a derived topic refers to a topic it does not read.
+        """
+        inputs = dict(self.required_inputs())
+        ground_truth = self.required_ground_truth()
+        shared_names = sorted(set(inputs) & set(ground_truth))
+        if shared_names:
+            raise ValueError(f"Evaluation '{self.name}' declares {shared_names} as input and as ground truth")
+        inputs.update(ground_truth)
+        if not inputs:
+            raise ValueError(f"Evaluation '{self.name}' declares no topic to evaluate")
+        for name, (source, _) in self.derived_topics().items():
+            if name not in inputs or source not in inputs or source == name:
+                raise ValueError(f"Evaluation '{self.name}' derives the topic of '{name}' from that of '{source}'")
+        return inputs
+
+    # ------------------------------------------------------------------
     # Optional visualization interface
     # ------------------------------------------------------------------
 
@@ -94,11 +170,11 @@ class Evaluation(ABC):
         """
         return {}
 
-    def visualize_sample(self, prediction: Any, label: Any, sample_id: Optional[str] = None, **auxiliary: Any) -> Dict[str, Any]:
-        """Build the visualization messages for a single (prediction, label) pair.
+    def visualize_sample(self, sample_id: Optional[str] = None, **messages: Any) -> Dict[str, Any]:
+        """Build the visualization messages for a single sample.
 
         Called once per sample while visualization is enabled, with the same
-        arguments as :meth:`record_sample`.
+        arguments as :meth:`compute_sample_metrics`.
 
         Returns
         -------
@@ -111,24 +187,17 @@ class Evaluation(ABC):
     # Concrete helpers
     # ------------------------------------------------------------------
 
-    def record_sample(
-        self,
-        prediction: Any,
-        label: Any,
-        sample_id: Optional[str] = None,
-        scene_id: Optional[str] = None,
-        **auxiliary: Any,
-    ) -> Dict[str, Any]:
+    def record_sample(self, sample_id: Optional[str] = None, scene_id: Optional[str] = None, **messages: Any) -> Dict[str, Any]:
         """Compute and store per-sample metrics.
 
-        This is the main entry point used by the evaluation loop.  Any
-        keyword arguments in *auxiliary* are forwarded verbatim to
-        :meth:`compute_sample_metrics`, allowing evaluations to receive
-        auxiliary per-sample data (e.g. static-map annotations) without
-        changing the abstract interface.
+        This is the main entry point used by the evaluation loop.  The
+        *messages* of the sample are forwarded verbatim to
+        :meth:`compute_sample_metrics`.
 
         Parameters
         ----------
+        sample_id:
+            An optional identifier for the sample.
         scene_id:
             The scene of the dataset the sample belongs to, which
             :meth:`finalize` aggregates the samples by.  An evaluation loop
@@ -140,7 +209,7 @@ class Evaluation(ABC):
         The stored entry of the sample, as ``{"sample_id", "scene_id",
         "metrics"}``.
         """
-        metrics = self.compute_sample_metrics(prediction, label, sample_id, **auxiliary)
+        metrics = self.compute_sample_metrics(sample_id=sample_id, **messages)
         entry: Dict[str, Any] = {"sample_id": sample_id, "scene_id": scene_id, "metrics": metrics}
         self._sample_results.append(entry)
         return entry

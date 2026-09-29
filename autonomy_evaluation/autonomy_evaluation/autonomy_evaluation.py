@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import signal
 import time
 from collections import deque, OrderedDict
 from functools import partial
@@ -10,6 +11,7 @@ from typing import Any, Callable, Optional, Sequence, Union
 import rclpy
 import rclpy.exceptions
 from autonomy_datasets_msgs.srv import RequestSamples
+from autonomy_evaluation.evaluations import load_evaluation
 from rcl_interfaces.msg import FloatingPointRange, IntegerRange, ParameterDescriptor, SetParametersResult
 from rclpy.clock import Clock, ClockType
 from rclpy.executors import ExternalShutdownException
@@ -31,6 +33,14 @@ _SERVICE_WAIT_LOG_INTERVAL_S = 10.0
 # evaluation inputs
 _SYNCHRONIZER_QUEUE_SIZE = 10
 
+# Values of the 'sample_source' parameter: the node requests the samples to evaluate from the
+# dataset, or evaluates whatever samples reach it, e.g. from a simulation or the RViz playback panel
+SAMPLE_SOURCE_DATASET = "dataset"
+SAMPLE_SOURCE_EXTERNAL = "external"
+
+# Stamp of a message as (seconds, nanoseconds)
+Stamp = tuple[int, int]
+
 
 def parse_sample_ids(sample_ids: str) -> list[int]:
     """Parses the IDs of the dataset samples to evaluate
@@ -48,56 +58,112 @@ def parse_sample_ids(sample_ids: str) -> list[int]:
 
 
 class SampleSynchronizer:
-    """Matches the messages of the evaluation inputs that belong to the same dataset sample.
+    """Matches the messages of the evaluation inputs that belong to the same sample.
 
-    The dataset stamps all messages of a sample with the recording time of that sample, so the
-    messages of a sample are matched by their exact header stamp. Messages of a sample that never
-    completes are dropped in the order they arrived, never by comparing their stamps: the dataset
-    replays one scene after the other, and a scene can have been recorded days before the scene
-    played before it, so the stamp of a message says nothing about how recently it was received.
-    (``message_filters.TimeSynchronizer`` drops by stamp instead, and therefore discards the
-    messages of a scene that starts before the end of the preceding one.)
+    Messages are matched by their stamp. By default, only messages with exactly the same stamp are
+    matched: the dataset stamps all messages of a sample with the recording time of that sample,
+    and a system under test stamps its output with the stamp of the input it processed. With a
+    tolerance, a message joins the waiting sample whose stamp is closest to its own, as long as
+    both stamps differ by no more than the tolerance and the sample still misses a message of its
+    input. This matches topics that a simulation or a live system publishes at slightly different
+    times or at different rates, of which the first message within the tolerance is matched.
+
+    Messages of a sample that never completes are dropped in the order they arrived, never by
+    comparing their stamps: the dataset replays one scene after the other, and a scene can have
+    been recorded days before the scene played before it, so the stamp of a message says nothing
+    about how recently it was received. (``message_filters.TimeSynchronizer`` drops by stamp
+    instead, and therefore discards the messages of a scene that starts before the end of the
+    preceding one.)
 
     Messages are added from subscription callbacks, which the node executor runs one after
     another, so no locking is needed.
     """
 
-    def __init__(self, topics: Sequence[str], callback: Callable[..., None], queue_size: int = _SYNCHRONIZER_QUEUE_SIZE):
+    def __init__(
+        self,
+        topics: Sequence[str],
+        callback: Callable[[Stamp, dict[str, Any]], None],
+        queue_size: int = _SYNCHRONIZER_QUEUE_SIZE,
+        tolerance: float = 0.0,
+    ):
         """Constructor
 
         Args:
             topics (Sequence[str]): input names to match, in the order their messages are passed
                 to the callback
-            callback (Callable[..., None]): called with the messages of every completed sample
+            callback (Callable[[Stamp, dict[str, Any]], None]): called for every completed sample
+                with the stamp of its message of the first input and its messages by input name
             queue_size (int, optional): number of samples to keep while they wait for the messages
                 of their remaining inputs
+            tolerance (float, optional): seconds by which the stamps of the messages of a sample
+                may differ; 0 only matches messages with exactly the same stamp
         """
         self.topics = list(topics)
         self.callback = callback
         self.queue_size = queue_size
-        # messages of the samples that are still missing inputs, by header stamp and in the order
-        # the samples were first received on any input
-        self.incomplete_samples: OrderedDict[tuple[int, int], dict[str, Any]] = OrderedDict()
+        self.tolerance_ns = round(tolerance * 1e9)
+        # stamped messages of the samples that are still missing inputs, by the stamp of the
+        # message that opened the sample and in the order the samples were opened
+        self.incomplete_samples: OrderedDict[Stamp, dict[str, tuple[Stamp, Any]]] = OrderedDict()
 
-    def add(self, topic: str, message: Any):
+    def add(self, topic: str, message: Any, stamp: Stamp):
         """Adds a received message and reports the sample it completes to the callback
 
         Args:
             topic (str): input name the message was received on
-            message (Any): received message, stamped with the time of its sample
+            message (Any): received message
+            stamp (Stamp): stamp of the message, i.e. of the sample it belongs to
         """
-        stamp = (message.header.stamp.sec, message.header.stamp.nanosec)
-        messages = self.incomplete_samples.setdefault(stamp, {})
-        messages[topic] = message
+        sample_stamp = self.find_sample(topic, stamp)
+        messages = self.incomplete_samples.setdefault(sample_stamp, {})
+        messages[topic] = (stamp, message)
 
         if len(messages) == len(self.topics):
-            del self.incomplete_samples[stamp]
-            self.callback(*(messages[topic] for topic in self.topics))
+            del self.incomplete_samples[sample_stamp]
+            self.callback(messages[self.topics[0]][0], {topic: messages[topic][1] for topic in self.topics})
             return
 
         # give up on the sample that has been waiting for its remaining inputs the longest
         while len(self.incomplete_samples) > self.queue_size:
             self.incomplete_samples.popitem(last=False)
+
+    def find_sample(self, topic: str, stamp: Stamp) -> Stamp:
+        """Finds the waiting sample a message belongs to
+
+        A message joins the sample of exactly its stamp, replacing a message the sample already
+        holds for its input, or else the waiting sample within the tolerance whose stamp is
+        closest to its own and that still misses a message of its input.
+
+        Args:
+            topic (str): input name the message was received on
+            stamp (Stamp): stamp of the message
+
+        Returns:
+            Stamp: stamp of the sample the message belongs to, which is its own stamp if it opens
+                a new sample
+        """
+        if stamp in self.incomplete_samples or not self.tolerance_ns:
+            return stamp
+        nanoseconds = _to_nanoseconds(stamp)
+        candidates = [
+            (abs(_to_nanoseconds(sample_stamp) - nanoseconds), sample_stamp)
+            for sample_stamp, messages in self.incomplete_samples.items()
+            if topic not in messages
+        ]
+        candidates = [candidate for candidate in candidates if candidate[0] <= self.tolerance_ns]
+        return min(candidates)[1] if candidates else stamp
+
+
+def _to_nanoseconds(stamp: Stamp) -> int:
+    """Converts a stamp into nanoseconds
+
+    Args:
+        stamp (Stamp): stamp as (seconds, nanoseconds)
+
+    Returns:
+        int: nanoseconds
+    """
+    return stamp[0] * 1_000_000_000 + stamp[1]
 
 
 class AutonomyEvaluation(Node):
@@ -111,24 +177,49 @@ class AutonomyEvaluation(Node):
         self.evaluation = self.declare_and_load_parameter(
             name="evaluation",
             param_type=rclpy.Parameter.Type.STRING,
-            description="evaluation name",
+            description="name of an evaluation of this package, or '<module>:<class>' of an evaluation implemented in "
+            "another package",
             default="nuscenes_lidar_object_detection",
+            add_to_auto_reconfigurable_params=False,
+            read_only=True,
         )
 
         self.visualize = self.declare_and_load_parameter(
             name="visualize",
             param_type=rclpy.Parameter.Type.BOOL,
-            description="publish the per-sample true positives, false positives and false negatives for RViz",
+            description="publish the per-sample visualization of the evaluation for RViz, e.g. the true positives, false "
+            "positives and false negatives of an object detection",
             default=False,
         )
 
-        self.manual_playback = self.declare_and_load_parameter(
-            name="manual_playback",
-            param_type=rclpy.Parameter.Type.BOOL,
-            description="leave requesting the samples of the dataset to the user",
-            default=False,
+        self.sample_source = self.declare_and_load_parameter(
+            name="sample_source",
+            param_type=rclpy.Parameter.Type.STRING,
+            description="'dataset' requests the samples to evaluate from the dataset one after another; 'external' "
+            "evaluates the samples published by others, e.g. by a simulation, a live system or the playback panel in RViz, "
+            "and reports the results once the node is stopped",
+            default="dataset",
             add_to_auto_reconfigurable_params=False,
             read_only=True,
+        )
+        if self.sample_source not in (SAMPLE_SOURCE_DATASET, SAMPLE_SOURCE_EXTERNAL):
+            self.get_logger().fatal(
+                f"Parameter 'sample_source' is neither '{SAMPLE_SOURCE_DATASET}' nor '{SAMPLE_SOURCE_EXTERNAL}': "
+                f"'{self.sample_source}'"
+            )
+            raise SystemExit(1)
+        self.requests_samples = self.sample_source == SAMPLE_SOURCE_DATASET
+
+        self.sync_tolerance = self.declare_and_load_parameter(
+            name="sync_tolerance",
+            param_type=rclpy.Parameter.Type.DOUBLE,
+            description="seconds by which the stamps of the messages of a sample may differ; 0 only matches messages "
+            "with exactly the same stamp, as the dataset and a system under test echoing its stamps publish them",
+            default=0.0,
+            add_to_auto_reconfigurable_params=False,
+            read_only=True,
+            from_value=0.0,
+            to_value=60.0,
         )
 
         self.samples_per_request = self.declare_and_load_parameter(
@@ -274,30 +365,28 @@ class AutonomyEvaluation(Node):
 
         self.data_subscriptions: dict[str, Subscription] = {}
 
-        # get handler for specified evaluation
-        evaluation_handler = None
-        if self.evaluation == "nuscenes_lidar_object_detection":
-            from autonomy_evaluation.evaluations.lidar_object_detection.NuscenesLidarObjectDetection import (
-                NuscenesLidarObjectDetection,
-            )
-
-            evaluation_handler = NuscenesLidarObjectDetection()
-        else:
-            self.get_logger().fatal(f"Evaluation '{self.evaluation}' not recognized, exiting")
+        # load the selected evaluation and the topics it reads
+        try:
+            evaluation_handler = load_evaluation(self.evaluation)
+            inputs = evaluation_handler.all_inputs()
+        except ValueError as exception:
+            self.get_logger().fatal(f"{exception}, exiting")
             raise SystemExit(1)
 
-        # create subscriptions for evaluation data inputs, whose messages are matched into the
-        # samples to evaluate by their header stamp
+        # create subscriptions for the topics of the evaluation, whose messages are matched into
+        # the samples to evaluate by their stamp
         self.message_synchronizer = SampleSynchronizer(
-            topics=list(evaluation_handler.required_inputs()),
+            topics=list(inputs),
             callback=self.evaluate_sample,
             queue_size=_SYNCHRONIZER_QUEUE_SIZE,
+            tolerance=self.sync_tolerance,
         )
-        for msg_topic, msg_type in evaluation_handler.required_inputs().items():
-            self.data_subscriptions[msg_topic] = self.create_subscription(
+        derived_topics = evaluation_handler.derived_topics()
+        for name, msg_type in inputs.items():
+            self.data_subscriptions[name] = self.create_subscription(
                 msg_type,
-                msg_topic,
-                partial(self.message_synchronizer.add, msg_topic),
+                self.input_topic(name, derived_topics),
+                partial(self.receive_message, name),
                 qos_profile=QoSProfile(
                     reliability=ReliabilityPolicy.RELIABLE,
                     durability=DurabilityPolicy.VOLATILE,
@@ -305,6 +394,22 @@ class AutonomyEvaluation(Node):
                     depth=10,
                 ),
             )
+        ground_truth = evaluation_handler.required_ground_truth()
+        for role, names in (("input", [name for name in inputs if name not in ground_truth]), ("ground truth", ground_truth)):
+            if names:
+                topics = ", ".join(f"'{name}' from '{self.data_subscriptions[name].topic_name}'" for name in names)
+                self.get_logger().info(f"Evaluating {role} {topics}")
+
+        # Messages without a header are stamped when they are received, which the messages of
+        # other inputs can only match within a tolerance
+        unstamped_inputs = [name for name, msg_type in inputs.items() if "header" not in msg_type.get_fields_and_field_types()]
+        if unstamped_inputs:
+            self.get_logger().info(f"Stamping the messages of {unstamped_inputs} on reception, as they carry no header")
+            if len(inputs) > 1 and not self.sync_tolerance:
+                self.get_logger().warn(
+                    f"Messages of {unstamped_inputs} can only be matched with those of other inputs if they are "
+                    "received at exactly their stamp, set 'sync_tolerance' to match them within a tolerance"
+                )
 
         # create publishers visualizing the evaluation's per-sample matching outcome
         self.visualization_publishers: dict[str, Publisher] = {}
@@ -322,9 +427,7 @@ class AutonomyEvaluation(Node):
                 )
             self.get_logger().info(f"Visualizing evaluation results on: {sorted(self.visualization_publishers)}")
 
-        # store handler and ordered topic list for use in evaluate_sample
         self.evaluation_handler = evaluation_handler
-        self.input_topics: list = list(evaluation_handler.required_inputs().keys())
 
         self.published_sample_ids: list[int] = []
         # A sample may already be evaluated before the dataset node answers the request that
@@ -339,11 +442,17 @@ class AutonomyEvaluation(Node):
         self.evaluation_finished = False
         self.num_evaluated_samples = 0
 
-        if self.manual_playback:
+        # With an external sample source, the samples are evaluated as they arrive. Whoever
+        # publishes them receives the responses of the dataset, if any, so the evaluation neither
+        # learns the scenes of the samples nor when publishing has ended, and reports its results
+        # once the node is stopped.
+        if not self.requests_samples:
             self.request_timer: Optional[Timer] = None
             if self.requested_sample_ids:
-                self.get_logger().warn("Parameter 'sample_ids' is ignored, as the samples are requested manually")
-            self.get_logger().info("Evaluating the samples requested manually, stop the node to report the results")
+                self.get_logger().warn(
+                    f"Parameter 'sample_ids' is ignored, as only sample source '{SAMPLE_SOURCE_DATASET}' requests samples"
+                )
+            self.get_logger().info("Evaluating the samples published by others, stop the node to report the results")
             return
 
         self.sample_request_client = self.create_client(RequestSamples, "~/request_samples")
@@ -355,6 +464,26 @@ class AutonomyEvaluation(Node):
             clock=Clock(clock_type=ClockType.STEADY_TIME),
         )
         self.get_logger().info(f"Requesting samples to evaluate from '{self.sample_request_client.srv_name}'")
+
+    def input_topic(self, name: str, derived_topics: dict[str, tuple[str, str]]) -> str:
+        """Determines the topic an input of the evaluation is subscribed on
+
+        An input is subscribed on its node-relative name, which is remapped onto the topic of the
+        system under test or of the ground truth. An input published next to another one follows
+        the topic of that input, unless it is remapped itself.
+
+        Args:
+            name (str): input name
+            derived_topics (dict[str, tuple[str, str]]): inputs published next to another input,
+                as input name -> (name of the other input, suffix of its topic)
+
+        Returns:
+            str: topic to subscribe on
+        """
+        if name not in derived_topics or self.resolve_topic_name(name) != self.resolve_topic_name(name, only_expand=True):
+            return name
+        source, suffix = derived_topics[name]
+        return self.resolve_topic_name(source) + suffix
 
     def advance_evaluation(self):
         """Requests the next samples to evaluate, or finalizes the evaluation once all were published
@@ -528,42 +657,47 @@ class AutonomyEvaluation(Node):
         self.get_logger().info("Nothing left to evaluate, shutting down")
         rclpy.try_shutdown()
 
-    def evaluate_sample(self, *args):
-        """Callback to evaluate a single sample when all required input messages have been received.
+    def receive_message(self, name: str, message: Any):
+        """Stamps a received message of an input and hands it to the matching of the samples
 
-        The positional *args* are the synchronized ROS messages in the same order
-        as the input names (dict keys) returned by
-        ``evaluation_handler.required_inputs()``.  Those keys match the
-        ``compute_sample_metrics`` parameter names, so the raw ``ObjectList``
-        messages are forwarded to ``evaluation_handler.record_sample`` by keyword;
-        the evaluation extracts the fields it needs inside
-        ``compute_sample_metrics``.
+        A message is stamped with the stamp of its header, which the dataset sets to the
+        recording time of its sample. A message without a header is stamped with the time it is
+        received at.
 
-        Samples are identified by the ROS header stamp of their messages, which is the stamp the
-        dataset recorded them with, and are attributed to the scene the dataset reported for them,
-        which can arrive after the sample has been evaluated.
+        Args:
+            name (str): input name the message was received on
+            message (Any): received message
         """
-        self.get_logger().debug("Received synchronized input messages, evaluating sample...")
+        header = getattr(message, "header", None)
+        if header is not None:
+            stamp = (header.stamp.sec, header.stamp.nanosec)
+        else:
+            stamp = self.get_clock().now().seconds_nanoseconds()
+        self.message_synchronizer.add(name, message, stamp)
 
-        if len(args) != len(self.input_topics):
-            self.get_logger().error(f"Expected {len(self.input_topics)} messages but received {len(args)}; skipping sample.")
-            return
+    def evaluate_sample(self, stamp: Stamp, messages: dict[str, Any]):
+        """Evaluates a single sample once the messages of all its inputs have been received
 
-        # Map each synchronized message to its required-input name (which matches
-        # the compute_sample_metrics parameter names).
-        messages = dict(zip(self.input_topics, args))
+        The messages are passed to the evaluation by the names of their inputs, which match the
+        parameters of its ``compute_sample_metrics``.
 
-        # Use the ROS header stamp of the first message as sample ID.
-        stamp = args[0].header.stamp
-        sample_id = f"{stamp.sec}.{stamp.nanosec:09d}"
-        self.get_logger().debug(f"Sample ID: '{sample_id}'")
+        Samples are identified by the stamp of their message of the first input, which is the
+        stamp the dataset recorded them with, and are attributed to the scene the dataset
+        reported for them, which can arrive after the sample has been evaluated.
+
+        Args:
+            stamp (Stamp): stamp of the sample
+            messages (dict[str, Any]): messages of the sample by input name
+        """
+        sample_id = f"{stamp[0]}.{stamp[1]:09d}"
+        self.get_logger().debug(f"Evaluating sample '{sample_id}'")
 
         result = self.evaluation_handler.record_sample(sample_id=sample_id, **messages)
         self.num_evaluated_samples += 1
         # attribute the sample to the scene the dataset published it from, which the dataset may
-        # only report after the sample has been evaluated; with the playback controlled manually,
-        # the scene is only reported to the playback panel
-        if not self.manual_playback:
+        # only report after the sample has been evaluated; with an external sample source, the
+        # scene is only reported to whoever requested the sample, if at all
+        if self.requests_samples:
             if self.scenes_awaiting_sample:
                 result["scene_id"] = self.scenes_awaiting_sample.popleft()
             else:
@@ -574,15 +708,15 @@ class AutonomyEvaluation(Node):
         if not self.results_path:
             self.get_logger().debug(f"Sample '{sample_id}' result: {result}")
 
-        # publish the sample's matching outcome for inspection in RViz
+        # publish the sample's visualization for inspection in RViz
         if self.visualization_publishers:
             visualization = self.evaluation_handler.visualize_sample(sample_id=sample_id, **messages)
             for msg_topic, publisher in self.visualization_publishers.items():
                 publisher.publish(visualization[msg_topic])
 
         # request the next samples, or aggregate the dataset metrics if this was the last one; with
-        # the playback controlled manually, the user requests the next samples instead
-        if not self.manual_playback:
+        # an external sample source, others publish the next samples instead
+        if self.requests_samples:
             self.advance_evaluation()
 
 
@@ -598,7 +732,10 @@ def main():
     finally:
         # An evaluation that is stopped before its last sample, e.g. with Ctrl-C, still reports the
         # samples it did evaluate, marked as incomplete results. An evaluation that ran to its end
-        # has been finalized already and is left untouched.
+        # has been finalized already and is left untouched. Ctrl-C reaches the node from the
+        # terminal and once more from the launch system, so further interrupts are ignored while
+        # the results are written, which they would otherwise abort.
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
         try:
             node.finalize_evaluation(complete=False)
         finally:

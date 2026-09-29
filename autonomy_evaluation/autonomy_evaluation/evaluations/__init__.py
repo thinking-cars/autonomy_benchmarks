@@ -4,5 +4,6 @@
 """Evaluations of automated driving tasks, each computing the metrics of one task."""
 
 from autonomy_evaluation.evaluations.Evaluation import Evaluation
+from autonomy_evaluation.evaluations.registry import EVALUATIONS, load_evaluation
 
-__all__ = ["Evaluation"]
+__all__ = ["Evaluation", "EVALUATIONS", "load_evaluation"]

@@ -5,11 +5,12 @@
 
 The node itself drives the evaluation via the ``request_samples`` service of the dataset and is
 covered by running it against a dataset. Tested here are the parsing of the samples to evaluate,
-as an unparsable value stops the node, the matching of the received input messages into the
-samples to evaluate, which has to hold up when the dataset continues with a scene that was
-recorded before the scene played before it, the evaluation of a sample, which requests the next
-samples unless the user controls the playback manually, and the finalization of the results,
-which reports the samples of an interrupted evaluation as incomplete.
+as an unparsable value stops the node, the topics the inputs of an evaluation are subscribed on,
+the stamping of received messages, the matching of the received input messages into the samples
+to evaluate, which has to hold up when the dataset continues with a scene that was recorded before
+the scene played before it and has to match topics of a simulation within a tolerance, the
+evaluation of a sample, which requests the next samples unless others publish them, and the
+finalization of the results, which reports the samples of an interrupted evaluation as incomplete.
 """
 
 from __future__ import annotations
@@ -33,10 +34,15 @@ def _message(stamp: tuple[int, int]) -> SimpleNamespace:
     return SimpleNamespace(header=SimpleNamespace(stamp=SimpleNamespace(sec=stamp[0], nanosec=stamp[1])))
 
 
-def _synchronizer(queue_size: int = 10) -> tuple[SampleSynchronizer, list]:
-    """Create a synchronizer of the evaluation inputs next to the list of the samples it matched."""
+def _synchronizer(queue_size: int = 10, topics=None, tolerance: float = 0.0) -> tuple[SampleSynchronizer, list]:
+    """Create a synchronizer of the evaluation inputs next to the list of the messages of the samples it matched."""
     matched_samples: list = []
-    synchronizer = SampleSynchronizer(_TOPICS, callback=lambda *msgs: matched_samples.append(msgs), queue_size=queue_size)
+    synchronizer = SampleSynchronizer(
+        topics or _TOPICS,
+        callback=lambda stamp, messages: matched_samples.append(tuple(messages.values())),
+        queue_size=queue_size,
+        tolerance=tolerance,
+    )
     return synchronizer, matched_samples
 
 
@@ -44,8 +50,14 @@ def _publish_sample(synchronizer: SampleSynchronizer, stamp: tuple[int, int], to
     """Add one message per given input (all of them by default), all stamped with the same time."""
     messages = {topic: _message(stamp) for topic in topics or _TOPICS}
     for topic, message in messages.items():
-        synchronizer.add(topic, message)
+        synchronizer.add(topic, message, stamp)
     return messages
+
+
+def _later(stamp: tuple[int, int], milliseconds: int) -> tuple[int, int]:
+    """Shift a stamp by the given milliseconds."""
+    nanoseconds = stamp[0] * 1_000_000_000 + stamp[1] + milliseconds * 1_000_000
+    return divmod(nanoseconds, 1_000_000_000)
 
 
 class TestParseSampleIds:
@@ -113,8 +125,8 @@ class TestSampleSynchronizer:
         pending = _publish_sample(synchronizer, _PREVIOUS_SCENE, topics=["label", "label_meta_info"])
         messages = _publish_sample(synchronizer, _NEXT_SCENE[0], topics=["label", "label_meta_info"])
 
-        synchronizer.add("prediction", _message(_PREVIOUS_SCENE))
-        synchronizer.add("prediction", _message(_NEXT_SCENE[0]))
+        synchronizer.add("prediction", _message(_PREVIOUS_SCENE), _PREVIOUS_SCENE)
+        synchronizer.add("prediction", _message(_NEXT_SCENE[0]), _NEXT_SCENE[0])
 
         assert len(matched_samples) == 2
         assert matched_samples[0][1:] == (pending["label"], pending["label_meta_info"])
@@ -136,6 +148,60 @@ class TestSampleSynchronizer:
 
         assert list(synchronizer.incomplete_samples) == _NEXT_SCENE[1:]
         assert matched_samples == []
+
+    def test_reports_the_stamp_of_the_first_input_and_the_messages_by_input(self):
+        """The sample is identified by its message of the first input, whichever message arrived first."""
+        reported: list = []
+        synchronizer = SampleSynchronizer(
+            ["trajectory", "objects"], callback=lambda stamp, messages: reported.append((stamp, messages)), tolerance=0.05
+        )
+        objects, trajectory = _message(_NEXT_SCENE[0]), _message(_later(_NEXT_SCENE[0], 20))
+
+        synchronizer.add("objects", objects, _NEXT_SCENE[0])
+        synchronizer.add("trajectory", trajectory, _later(_NEXT_SCENE[0], 20))
+
+        assert reported == [(_later(_NEXT_SCENE[0], 20), {"trajectory": trajectory, "objects": objects})]
+
+    def test_a_single_input_reports_every_message_as_a_sample(self):
+        """An evaluation of a single topic evaluates each of its messages on its own."""
+        synchronizer, matched_samples = _synchronizer(topics=["ego_data"])
+
+        for stamp in _NEXT_SCENE:
+            _publish_sample(synchronizer, stamp, topics=["ego_data"])
+
+        assert len(matched_samples) == len(_NEXT_SCENE)
+
+    def test_matches_messages_of_different_stamps_within_the_tolerance(self):
+        """Topics a simulation publishes at slightly different times are matched within the tolerance."""
+        for tolerance, num_matched_samples in [(0.0, 0), (0.05, 1)]:
+            synchronizer, matched_samples = _synchronizer(topics=["ego_data", "objects"], tolerance=tolerance)
+
+            _publish_sample(synchronizer, _NEXT_SCENE[0], topics=["ego_data"])
+            _publish_sample(synchronizer, _later(_NEXT_SCENE[0], 30), topics=["objects"])
+
+            assert len(matched_samples) == num_matched_samples
+
+    def test_does_not_match_messages_beyond_the_tolerance(self):
+        """Messages whose stamps differ by more than the tolerance belong to different samples."""
+        synchronizer, matched_samples = _synchronizer(topics=["ego_data", "objects"], tolerance=0.05)
+
+        _publish_sample(synchronizer, _NEXT_SCENE[0], topics=["ego_data"])
+        _publish_sample(synchronizer, _later(_NEXT_SCENE[0], 60), topics=["objects"])
+
+        assert matched_samples == []
+        assert len(synchronizer.incomplete_samples) == 2
+
+    def test_matches_the_closest_message_of_a_topic_published_at_a_higher_rate(self):
+        """A message of a slower topic joins the message of a faster topic whose stamp is closest to its own."""
+        synchronizer, matched_samples = _synchronizer(topics=["ego_data", "objects"], tolerance=0.05)
+        ego_data = {
+            offset: _publish_sample(synchronizer, _later(_NEXT_SCENE[0], offset), topics=["ego_data"])
+            for offset in range(0, 100, 10)
+        }
+
+        objects = _publish_sample(synchronizer, _later(_NEXT_SCENE[0], 42), topics=["objects"])
+
+        assert matched_samples == [(ego_data[40]["ego_data"], objects["objects"])]
 
 
 class _FakeLogger:
@@ -182,14 +248,14 @@ class _RecordingEvaluationHandler:
         """Record a sample the way the evaluation stores it, still without a scene."""
         entry = {"sample_id": sample_id, "scene_id": None, "metrics": {}}
         self.recorded_samples.append(entry)
+        self.recorded_messages = messages
         return entry
 
 
-def _evaluating_node(manual_playback: bool) -> SimpleNamespace:
+def _evaluating_node(requests_samples: bool) -> SimpleNamespace:
     """Stub the node state that evaluating a sample reads, counting the attempts to continue the evaluation."""
     node = SimpleNamespace(
-        manual_playback=manual_playback,
-        input_topics=_TOPICS,
+        requests_samples=requests_samples,
         evaluation_handler=_RecordingEvaluationHandler(),
         num_evaluated_samples=0,
         scenes_awaiting_sample=deque(),
@@ -205,35 +271,112 @@ def _evaluating_node(manual_playback: bool) -> SimpleNamespace:
     return node
 
 
-def _sample_messages(stamp: tuple[int, int]) -> tuple:
-    """Fake the synchronized input messages of one sample, in the order of the inputs."""
-    return tuple(_message(stamp) for _ in _TOPICS)
+def _sample_messages(stamp: tuple[int, int]) -> dict:
+    """Fake the synchronized input messages of one sample, by input name."""
+    return {topic: _message(stamp) for topic in _TOPICS}
 
 
 class TestEvaluateSample:
-    """Tests evaluating a sample with the playback driven by the evaluation or by the user in RViz."""
+    """Tests evaluating a sample with the samples requested from the dataset or published by others."""
+
+    def test_passes_the_messages_by_input_name_and_identifies_the_sample_by_its_stamp(self):
+        """The evaluation receives each message by the name of its input."""
+        node = _evaluating_node(requests_samples=True)
+        messages = _sample_messages(_NEXT_SCENE[0])
+
+        AutonomyEvaluation.evaluate_sample(node, _NEXT_SCENE[0], messages)
+
+        assert node.evaluation_handler.recorded_messages == messages
+        assert node.evaluation_handler.recorded_samples[0]["sample_id"] == "1531885320.049418000"
 
     def test_evaluation_requests_the_next_samples_after_evaluating_one(self):
-        """Without manual playback, the evaluation continues with the next samples on its own."""
-        node = _evaluating_node(manual_playback=False)
+        """With the dataset as sample source, the evaluation continues with the next samples on its own."""
+        node = _evaluating_node(requests_samples=True)
 
-        AutonomyEvaluation.evaluate_sample(node, *_sample_messages(_NEXT_SCENE[0]))
+        AutonomyEvaluation.evaluate_sample(node, _NEXT_SCENE[0], _sample_messages(_NEXT_SCENE[0]))
 
         assert node.num_advances == 1
         # the dataset reports the scene of the sample with the response to the request
         assert list(node.samples_awaiting_scene) == node.evaluation_handler.recorded_samples
 
-    def test_manual_playback_leaves_requesting_samples_to_the_user(self):
-        """With manual playback, samples are evaluated as they arrive, without requesting further ones."""
-        node = _evaluating_node(manual_playback=True)
+    def test_external_sample_source_leaves_publishing_samples_to_others(self):
+        """With an external sample source, samples are evaluated as they arrive, without requesting further ones."""
+        node = _evaluating_node(requests_samples=False)
 
         for stamp in _NEXT_SCENE:
-            AutonomyEvaluation.evaluate_sample(node, *_sample_messages(stamp))
+            AutonomyEvaluation.evaluate_sample(node, stamp, _sample_messages(stamp))
 
         assert node.num_evaluated_samples == len(_NEXT_SCENE)
         assert node.num_advances == 0
-        # the scenes are only reported to the playback panel, so no sample waits for one
+        # the scenes are only reported to whoever published the samples, so no sample waits for one
         assert not node.samples_awaiting_scene
+
+
+class TestReceiveMessage:
+    """Tests stamping the received messages before they are matched into samples."""
+
+    @staticmethod
+    def _receiving_node(now: tuple[int, int]) -> tuple[SimpleNamespace, list]:
+        """Stub the node state that receiving a message reads, collecting the stamped messages."""
+        received: list = []
+        node = SimpleNamespace(
+            message_synchronizer=SimpleNamespace(add=lambda name, message, stamp: received.append((name, message, stamp))),
+            get_clock=lambda: SimpleNamespace(now=lambda: SimpleNamespace(seconds_nanoseconds=lambda: now)),
+        )
+        return node, received
+
+    def test_stamps_a_message_with_its_header_stamp(self):
+        """A message is matched by the stamp its publisher gave it."""
+        node, received = self._receiving_node(now=_PREVIOUS_SCENE)
+        message = _message(_NEXT_SCENE[0])
+
+        AutonomyEvaluation.receive_message(node, "prediction", message)
+
+        assert received == [("prediction", message, _NEXT_SCENE[0])]
+
+    def test_stamps_a_message_without_header_on_reception(self):
+        """A message without header, e.g. a std_msgs/Bool, is stamped with the time it is received at."""
+        node, received = self._receiving_node(now=_PREVIOUS_SCENE)
+        message = SimpleNamespace(data=True)
+
+        AutonomyEvaluation.receive_message(node, "collision", message)
+
+        assert received == [("collision", message, _PREVIOUS_SCENE)]
+
+
+class TestInputTopic:
+    """Tests the topics the inputs of an evaluation are subscribed on."""
+
+    _DERIVED_TOPICS = {"label_meta_info": ("label", "/meta_info")}
+
+    @staticmethod
+    def _node(remappings: dict) -> SimpleNamespace:
+        """Stub the topic resolution of a node started with the given remappings of its relative names."""
+
+        def resolve_topic_name(topic: str, only_expand: bool = False) -> str:
+            return f"/{topic}" if only_expand or topic not in remappings else remappings[topic]
+
+        return SimpleNamespace(resolve_topic_name=resolve_topic_name)
+
+    def test_subscribes_an_input_on_its_name(self):
+        """An input is subscribed on its node-relative name, which remappings redirect."""
+        node = self._node({"label": "/object_list/lidar_01"})
+
+        assert AutonomyEvaluation.input_topic(node, "label", self._DERIVED_TOPICS) == "label"
+
+    def test_derived_input_follows_the_topic_of_its_source(self):
+        """Meta information is subscribed next to the remapped topic of the object list it belongs to."""
+        node = self._node({"label": "/object_list/lidar_01"})
+
+        topic = AutonomyEvaluation.input_topic(node, "label_meta_info", self._DERIVED_TOPICS)
+
+        assert topic == "/object_list/lidar_01/meta_info"
+
+    def test_remapped_derived_input_keeps_its_own_topic(self):
+        """A derived input that is remapped itself is subscribed where it is remapped to."""
+        node = self._node({"label": "/object_list/lidar_01", "label_meta_info": "/meta_info"})
+
+        assert AutonomyEvaluation.input_topic(node, "label_meta_info", self._DERIVED_TOPICS) == "label_meta_info"
 
 
 def _node(num_evaluated_samples: int = 2, results_path: str = "/results/evaluation.json") -> SimpleNamespace:

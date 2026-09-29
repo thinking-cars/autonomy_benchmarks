@@ -1,18 +1,21 @@
 # Copyright Thinking Cars GmbH
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the result store of the Evaluation base class.
+"""Tests for the topics and the result store of the Evaluation base class.
 
-Metrics are reported on three levels: for every single sample, aggregated over the samples of each
-scene of the dataset, and aggregated over all evaluated samples. A minimal evaluation whose metrics
-are trivial to predict is used, so that the tests cover the grouping and not a metric definition.
+An evaluation reads the topics of a system under test and, if it compares them with a reference,
+ground-truth topics. Metrics are reported on three levels: for every single sample, aggregated over
+the samples of each scene of the dataset, and aggregated over all evaluated samples. Minimal
+evaluations whose metrics are trivial to predict are used, so that the tests cover the topics and
+the grouping and not a metric definition.
 """
 
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
+import pytest
 from autonomy_evaluation.evaluations.Evaluation import Evaluation
 
 
@@ -24,10 +27,14 @@ class CountingEvaluation(Evaluation):
         super().__init__(name="counting", description="counts objects")
 
     def required_inputs(self) -> Dict[str, Any]:
-        """Declare the inputs, which this evaluation does not read from ROS messages."""
-        return {"prediction": object, "label": object}
+        """Declare the evaluated input, which this evaluation does not read from ROS messages."""
+        return {"prediction": object}
 
-    def compute_sample_metrics(self, prediction: Any, label: Any, sample_id: str = None) -> Dict[str, Any]:
+    def required_ground_truth(self) -> Dict[str, Any]:
+        """Declare the ground truth the input is compared with."""
+        return {"label": object}
+
+    def compute_sample_metrics(self, prediction: Any, label: Any, sample_id: Optional[str] = None) -> Dict[str, Any]:
         """Report the given prediction and label counts of a single sample."""
         return {"num_predictions": prediction, "num_labels": label}
 
@@ -39,12 +46,88 @@ class CountingEvaluation(Evaluation):
         }
 
 
+class ClosestObjectEvaluation(Evaluation):
+    """Minimal evaluation of inputs only, reporting the closest object without any ground truth."""
+
+    def __init__(self) -> None:
+        """Name the evaluation."""
+        super().__init__(name="closest_object")
+
+    def required_inputs(self) -> Dict[str, Any]:
+        """Declare the ego position and the object distances, as a closed-loop planner is evaluated on."""
+        return {"ego_position": object, "object_positions": object}
+
+    def compute_sample_metrics(self, ego_position: float, object_positions: List[float], sample_id: Optional[str] = None):
+        """Report the distance of the closest object of a single sample."""
+        return {"min_distance": min(abs(position - ego_position) for position in object_positions)}
+
+    def compute_aggregated_metrics(self, sample_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Report the closest distance of all given samples."""
+        return {"min_distance": min(entry["metrics"]["min_distance"] for entry in sample_results)}
+
+
+class _TopicsEvaluation(CountingEvaluation):
+    """Counting evaluation with freely declared topics, to test their validation."""
+
+    def __init__(self, inputs: Dict[str, Any], ground_truth: Dict[str, Any], derived_topics=None) -> None:
+        """Declare the given topics."""
+        super().__init__()
+        self._inputs, self._ground_truth, self._derived_topics = inputs, ground_truth, derived_topics or {}
+
+    def required_inputs(self) -> Dict[str, Any]:
+        """Declare the given inputs."""
+        return self._inputs
+
+    def required_ground_truth(self) -> Dict[str, Any]:
+        """Declare the given ground truth."""
+        return self._ground_truth
+
+    def derived_topics(self):
+        """Declare the given derived topics."""
+        return self._derived_topics
+
+
 def _evaluation_of(samples) -> CountingEvaluation:
     """Record ``(sample_id, scene_id, num_predictions, num_labels)`` samples in an evaluation."""
     evaluation = CountingEvaluation()
     for sample_id, scene_id, num_predictions, num_labels in samples:
         evaluation.record_sample(prediction=num_predictions, label=num_labels, sample_id=sample_id, scene_id=scene_id)
     return evaluation
+
+
+class TestTopics:
+    """Tests declaring the topics an evaluation reads."""
+
+    def test_inputs_are_followed_by_the_ground_truth(self):
+        """The topics are passed to the evaluation in the order inputs first, ground truth second."""
+        assert list(CountingEvaluation().all_inputs()) == ["prediction", "label"]
+
+    def test_evaluation_of_inputs_only_needs_no_ground_truth(self):
+        """An evaluation computing its metrics from the system under test alone declares no ground truth."""
+        evaluation = ClosestObjectEvaluation()
+
+        assert evaluation.required_ground_truth() == {}
+        assert evaluation.derived_topics() == {}
+        assert list(evaluation.all_inputs()) == ["ego_position", "object_positions"]
+
+    def test_rejects_a_topic_declared_as_input_and_as_ground_truth(self):
+        """A topic name identifies a single message of a sample, so it cannot play both roles."""
+        with pytest.raises(ValueError, match="as input and as ground truth"):
+            _TopicsEvaluation({"objects": object}, {"objects": object}).all_inputs()
+
+    def test_rejects_an_evaluation_without_topics(self):
+        """An evaluation that reads no topic would never evaluate a sample."""
+        with pytest.raises(ValueError, match="no topic"):
+            _TopicsEvaluation({}, {}).all_inputs()
+
+    @pytest.mark.parametrize(
+        "derived_topics",
+        [{"meta_info": ("label", "/meta_info")}, {"label": ("objects", "/meta_info")}, {"label": ("label", "/meta_info")}],
+    )
+    def test_rejects_a_derived_topic_of_unknown_inputs(self, derived_topics):
+        """A derived topic and the topic it is derived from must both be read by the evaluation."""
+        with pytest.raises(ValueError, match="derives the topic"):
+            _TopicsEvaluation({"prediction": object}, {"label": object}, derived_topics).all_inputs()
 
 
 class TestSampleResults:
@@ -123,6 +206,17 @@ class TestFinalize:
         assert results["num_scenes"] == 1
         assert results["aggregated_metrics"]["num_predictions"] == 3
         assert results["scene_results"]["scene_a"]["aggregated_metrics"]["num_predictions"] == 1
+
+    def test_aggregates_an_evaluation_of_inputs_only(self):
+        """Samples of an evaluation without ground truth are recorded from their inputs alone."""
+        evaluation = ClosestObjectEvaluation()
+        evaluation.record_sample(sample_id="0", scene_id="scene_a", ego_position=0.0, object_positions=[4.0, -2.5])
+        evaluation.record_sample(sample_id="1", scene_id="scene_a", ego_position=1.0, object_positions=[4.0])
+
+        results = evaluation.finalize()
+
+        assert results["aggregated_metrics"] == {"min_distance": 2.5}
+        assert results["scene_results"]["scene_a"]["num_samples"] == 2
 
     def test_reports_no_scene_without_recorded_scenes(self):
         """Samples recorded without a scene aggregate to no scene results at all."""
