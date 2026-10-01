@@ -9,7 +9,7 @@ services:
       - -ic
       - |
         ros2 launch autonomy_evaluation autonomy_evaluation.launch.py \
-          evaluation:=nuscenes_lidar_object_detection \
+          evaluation:=object_detection_3d \
           prediction:=/object_list/prediction \
           label:=/object_list/lidar_01 \
           request_samples:=/datasets/request_samples \

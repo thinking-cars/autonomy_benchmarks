@@ -69,10 +69,17 @@ class ClosestObjectEvaluation(Evaluation):
 class _TopicsEvaluation(CountingEvaluation):
     """Counting evaluation with freely declared topics, to test their validation."""
 
-    def __init__(self, inputs: Dict[str, Any], ground_truth: Dict[str, Any], derived_topics=None) -> None:
+    def __init__(
+        self,
+        inputs: Dict[str, Any],
+        ground_truth: Dict[str, Any],
+        derived_topics=None,
+        optional_ground_truth=None,
+    ) -> None:
         """Declare the given topics."""
         super().__init__()
         self._inputs, self._ground_truth, self._derived_topics = inputs, ground_truth, derived_topics or {}
+        self._optional_ground_truth = optional_ground_truth or {}
 
     def required_inputs(self) -> Dict[str, Any]:
         """Declare the given inputs."""
@@ -81,6 +88,10 @@ class _TopicsEvaluation(CountingEvaluation):
     def required_ground_truth(self) -> Dict[str, Any]:
         """Declare the given ground truth."""
         return self._ground_truth
+
+    def optional_ground_truth(self) -> Dict[str, Any]:
+        """Declare the given optional ground truth."""
+        return self._optional_ground_truth
 
     def derived_topics(self):
         """Declare the given derived topics."""
@@ -128,6 +139,35 @@ class TestTopics:
         """A derived topic and the topic it is derived from must both be read by the evaluation."""
         with pytest.raises(ValueError, match="derives the topic"):
             _TopicsEvaluation({"prediction": object}, {"label": object}, derived_topics).all_inputs()
+
+    def test_optional_ground_truth_follows_the_required_topics(self):
+        """Optional ground truth is read next to the required topics, after them."""
+        evaluation = _TopicsEvaluation(
+            {"prediction": object}, {"label": object}, optional_ground_truth={"label_meta_info": object}
+        )
+
+        assert list(evaluation.all_inputs()) == ["prediction", "label", "label_meta_info"]
+
+    def test_rejects_a_topic_declared_as_required_and_as_optional(self):
+        """A topic is either waited for or not, so it cannot be required and optional at once."""
+        with pytest.raises(ValueError, match="as ground truth and as optional ground truth"):
+            _TopicsEvaluation({"prediction": object}, {"label": object}, optional_ground_truth={"label": object}).all_inputs()
+
+    def test_rejects_an_evaluation_of_optional_topics_only(self):
+        """A sample is only evaluated once its required topics have been received, so at least one is needed."""
+        with pytest.raises(ValueError, match="no topic"):
+            _TopicsEvaluation({}, {}, optional_ground_truth={"label": object}).all_inputs()
+
+    def test_optional_topic_may_be_derived_from_a_required_one(self):
+        """Meta information that not every dataset publishes follows the topic of the labels it belongs to."""
+        evaluation = _TopicsEvaluation(
+            {"prediction": object},
+            {"label": object},
+            derived_topics={"label_meta_info": ("label", "/meta_info")},
+            optional_ground_truth={"label_meta_info": object},
+        )
+
+        assert "label_meta_info" in evaluation.all_inputs()
 
 
 class TestSampleResults:

@@ -4,11 +4,13 @@
 """Abstract base class for all evaluations of automated driving tasks.
 
 Each evaluation defines which topics it reads and how to compute per-sample and
-aggregated metrics from their messages.  An evaluation may read the topics of a
+aggregated metrics from their messages. An evaluation may read the topics of a
 system under test only, e.g. the ego state and the surrounding objects of a
 closed-loop planner to compute its time to collision, or compare them with
 ground-truth topics, e.g. the predictions of a perception algorithm with the
-labels of a dataset.  Concrete subclasses must override the abstract methods.
+labels of a dataset. Ground truth that enriches an evaluation without being
+necessary for it, e.g. dataset annotations that not every dataset publishes, is
+declared as optional. Concrete subclasses must override the abstract methods.
 """
 
 from __future__ import annotations
@@ -24,7 +26,8 @@ class Evaluation(ABC):
 
     An evaluation is responsible for:
     * declaring the topics it reads, split into the inputs from the system
-      under test and, if it compares them with a reference, the ground truth,
+      under test and, if it compares them with a reference, the required and
+      optional ground truth,
     * computing per-sample metrics from the messages of these topics,
     * aggregating per-sample metrics into scene-level and dataset-level metrics,
     * persisting results to JSON.
@@ -32,7 +35,8 @@ class Evaluation(ABC):
     The messages of all topics that belong to the same sample are passed to
     :meth:`compute_sample_metrics` as keyword arguments named after the topics
     (see :meth:`all_inputs`), so an implementation names its parameters like
-    its topics.
+    its topics.  The message of optional ground truth that is not published is
+    passed as ``None``.
     """
 
     def __init__(self, name: str, description: str = "") -> None:
@@ -76,6 +80,25 @@ class Evaluation(ABC):
         """
         return {}
 
+    def optional_ground_truth(self) -> Dict[str, Any]:
+        """Define the ground-truth topics that are compared with the inputs while they are published.
+
+        Optional ground truth is a reference that not every source of ground
+        truth provides, e.g. meta information published next to the labels
+        of a dataset that ``perception_msgs`` cannot express.  A sample is
+        evaluated once the messages of all required topics have been received,
+        waiting for the message of an optional topic only while that topic has
+        a publisher.  Otherwise, its message is passed to
+        :meth:`compute_sample_metrics` as ``None``.
+
+        Returns
+        -------
+        A dictionary mapping ground-truth names to their ROS message types,
+        empty by default. The names are used like those of
+        :meth:`required_inputs`.
+        """
+        return {}
+
     def derived_topics(self) -> Dict[str, Tuple[str, str]]:
         """Define the inputs that are published next to the topic of another input.
 
@@ -101,7 +124,8 @@ class Evaluation(ABC):
             An optional identifier for the sample.
         messages:
             One message per topic of :meth:`all_inputs`, passed by the name
-            of its topic.
+            of its topic; ``None`` for optional ground truth that is not
+            published.
 
         Returns
         -------
@@ -134,22 +158,30 @@ class Evaluation(ABC):
         Returns
         -------
         A dictionary mapping the names of the inputs, followed by those of the
-        ground truth, to their ROS message types.
+        required and of the optional ground truth, to their ROS message types.
 
         Raises
         ------
         ValueError
-            If the evaluation reads no topic, an input and a ground-truth topic
-            share a name, or a derived topic refers to a topic it does not read.
+            If the evaluation requires no topic, declares a topic name twice,
+            e.g. as input and as ground truth, or a derived topic refers to a
+            topic it does not read.
         """
-        inputs = dict(self.required_inputs())
-        ground_truth = self.required_ground_truth()
-        shared_names = sorted(set(inputs) & set(ground_truth))
-        if shared_names:
-            raise ValueError(f"Evaluation '{self.name}' declares {shared_names} as input and as ground truth")
-        inputs.update(ground_truth)
-        if not inputs:
-            raise ValueError(f"Evaluation '{self.name}' declares no topic to evaluate")
+        declared_topics = {
+            "input": self.required_inputs(),
+            "ground truth": self.required_ground_truth(),
+            "optional ground truth": self.optional_ground_truth(),
+        }
+        inputs: Dict[str, Any] = {}
+        roles: Dict[str, str] = {}
+        for role, topics in declared_topics.items():
+            for name, msg_type in topics.items():
+                if name in roles:
+                    raise ValueError(f"Evaluation '{self.name}' declares '{name}' as {roles[name]} and as {role}")
+                inputs[name] = msg_type
+                roles[name] = role
+        if not declared_topics["input"] and not declared_topics["ground truth"]:
+            raise ValueError(f"Evaluation '{self.name}' requires no topic to evaluate")
         for name, (source, _) in self.derived_topics().items():
             if name not in inputs or source not in inputs or source == name:
                 raise ValueError(f"Evaluation '{self.name}' derives the topic of '{name}' from that of '{source}'")
@@ -165,7 +197,7 @@ class Evaluation(ABC):
         Returns
         -------
         A dictionary mapping output names to their ROS message types, empty for
-        an evaluation that offers no visualization.  The names are node-relative
+        an evaluation that offers no visualization. The names are node-relative
         topics and match the keys of :meth:`visualize_sample`.
         """
         return {}
@@ -190,7 +222,7 @@ class Evaluation(ABC):
     def record_sample(self, sample_id: Optional[str] = None, scene_id: Optional[str] = None, **messages: Any) -> Dict[str, Any]:
         """Compute and store per-sample metrics.
 
-        This is the main entry point used by the evaluation loop.  The
+        This is the main entry point used by the evaluation loop. The
         *messages* of the sample are forwarded verbatim to
         :meth:`compute_sample_metrics`.
 
@@ -200,7 +232,7 @@ class Evaluation(ABC):
             An optional identifier for the sample.
         scene_id:
             The scene of the dataset the sample belongs to, which
-            :meth:`finalize` aggregates the samples by.  An evaluation loop
+            :meth:`finalize` aggregates the samples by. An evaluation loop
             that learns the scene only after the sample has been evaluated may
             set it on the returned entry instead of passing it here.
 
@@ -220,7 +252,7 @@ class Evaluation(ABC):
         Returns
         -------
         A dictionary mapping each scene to its recorded samples, in the order
-        the samples were recorded.  Samples recorded without a scene are left
+        the samples were recorded. Samples recorded without a scene are left
         out, as they cannot be attributed to one.
         """
         scenes: Dict[str, List[Dict[str, Any]]] = {}
@@ -240,7 +272,7 @@ class Evaluation(ABC):
         Parameters
         ----------
         complete:
-            Whether all samples of the evaluation have been evaluated.  An
+            Whether all samples of the evaluation have been evaluated. An
             evaluation that was interrupted, e.g. with Ctrl-C, still reports the
             samples it did evaluate, marked as ``"complete": false`` so that
             they are not mistaken for the results over the whole dataset.
@@ -262,7 +294,6 @@ class Evaluation(ABC):
                 }
                 for scene_id, entries in scenes.items()
             },
-            # "sample_results": self._sample_results,
         }
 
     def save_results(self, output_path: str, results: Optional[Dict[str, Any]] = None, complete: bool = True) -> str:
