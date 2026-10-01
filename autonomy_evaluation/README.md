@@ -1,8 +1,11 @@
 # `autonomy_evaluation`
 
-Metrics-based evaluation of automated driving tasks, generating the evidence for benchmarking automated driving deployments
+Metrics-based evaluation of automated driving modules, generating the evidence for benchmarking automated driving deployments
 
-`autonomy_evaluation` is the part of the **Autonomy.Benchmarks** suite that turns the output of a system under test into metrics. It evaluates arbitrary ROS systems under test, either from their own topics alone, e.g. the time to collision of a closed-loop planner, or against ground truth, e.g. the predictions of a perception algorithm against the labels of a dataset replayed by [autonomy_datasets](https://github.com/thinking-cars/autonomy_datasets). The metrics are reported per scene and over all evaluated samples, as the evidence an automated driving deployment is benchmarked on.
+`autonomy_evaluation` is the part of the **Autonomy.Benchmarks** suite that turns the output of a system under test into
+metrics. It evaluates the samples that [autonomy_datasets](https://github.com/thinking-cars/autonomy_datasets) replays
+against the labels of the dataset, and reports the metrics per scene and over all evaluated samples, as one part of the evidence
+an automated driving deployment is benchmarked on.
 
 ## Nodes
 
