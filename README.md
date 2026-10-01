@@ -1,36 +1,37 @@
-# autonomy_benchmarks
+# autonomy_evaluation
 
 <p align="center">
   <a href="https://www.ros.org"><img src="https://img.shields.io/badge/ROS 2-jazzy-22314e"/></a>
-  <a href="https://github.com/thinking-cars/autonomy_benchmarks/releases/latest"><img src="https://img.shields.io/github/v/release/thinking-cars/autonomy_benchmarks"/></a>
-  <a href="https://github.com/thinking-cars/autonomy_benchmarks/blob/main/LICENSE"><img src="https://img.shields.io/github/license/thinking-cars/autonomy_benchmarks"/></a>
+  <a href="https://github.com/thinking-cars/autonomy_evaluation/releases/latest"><img src="https://img.shields.io/github/v/release/thinking-cars/autonomy_evaluation"/></a>
+  <a href="https://github.com/thinking-cars/autonomy_evaluation/blob/main/LICENSE"><img src="https://img.shields.io/github/license/thinking-cars/autonomy_evaluation"/></a>
   <br>
-  <a href="https://github.com/thinking-cars/autonomy_benchmarks/actions/workflows/docker-ros.yml"><img src="https://github.com/thinking-cars/autonomy_benchmarks/actions/workflows/docker-ros.yml/badge.svg"/></a>
-  <a href="https://github.com/thinking-cars/autonomy_benchmarks/actions/workflows/compose-oci.yml"><img src="https://github.com/thinking-cars/autonomy_benchmarks/actions/workflows/compose-oci.yml/badge.svg"/></a>
-  <a href="https://github.com/thinking-cars/autonomy_benchmarks/actions/workflows/helm-oci.yml"><img src="https://github.com/thinking-cars/autonomy_benchmarks/actions/workflows/helm-oci.yml/badge.svg"/></a>
-  <a href="https://thinking-cars.github.io/autonomy_benchmarks"><img src="https://github.com/thinking-cars/autonomy_benchmarks/actions/workflows/docs.yml/badge.svg"/></a>
-  <a href="https://github.com/thinking-cars/autonomy_benchmarks/actions/workflows/consistency.yml"><img src="https://github.com/thinking-cars/autonomy_benchmarks/actions/workflows/consistency.yml/badge.svg"/></a>
+  <a href="https://github.com/thinking-cars/autonomy_evaluation/actions/workflows/docker-ros.yml"><img src="https://github.com/thinking-cars/autonomy_evaluation/actions/workflows/docker-ros.yml/badge.svg"/></a>
+  <a href="https://github.com/thinking-cars/autonomy_evaluation/actions/workflows/compose-oci.yml"><img src="https://github.com/thinking-cars/autonomy_evaluation/actions/workflows/compose-oci.yml/badge.svg"/></a>
+  <a href="https://github.com/thinking-cars/autonomy_evaluation/actions/workflows/helm-oci.yml"><img src="https://github.com/thinking-cars/autonomy_evaluation/actions/workflows/helm-oci.yml/badge.svg"/></a>
+  <a href="https://thinking-cars.github.io/autonomy_evaluation"><img src="https://github.com/thinking-cars/autonomy_evaluation/actions/workflows/docs.yml/badge.svg"/></a>
+  <a href="https://github.com/thinking-cars/autonomy_evaluation/actions/workflows/consistency.yml"><img src="https://github.com/thinking-cars/autonomy_evaluation/actions/workflows/consistency.yml/badge.svg"/></a>
 </p>
 
-> This repository will be part of the **Autonomy.Hub Ecosystem**
+> This repository is part of the **Autonomy.Benchmarks** suite of the **Autonomy.Hub Ecosystem**
 
-As part of the Autonomy.Hub Ecosystem, **Autonomy.Benchmarks** enables the Automated Driving community to easily benchmark their automated driving building blocks across different tasks and datasets:
+Within the Autonomy.Benchmarks suite, **Autonomy.Evaluation** generates the metrics-based evidence for benchmarking automated driving deployments. It evaluates arbitrary ROS systems under test, either from their own topics alone, e.g. a closed-loop planner by its time to collision, or against ground truth, e.g. a perception algorithm against the labels of a dataset replayed by [Autonomy.Datasets](https://github.com/thinking-cars/autonomy_datasets), and reports the resulting metrics per scene and over all evaluated samples:
 
-- 🔄 **Unified ROS 2 Interface**: Work with multiple datasets using the benefits of the ROS 2 ecosystem
-- 📊 **Comprehensive Benchmarks**: Use the provided benchmarks with [Autonomy.Datasets](https://github.com/thinking-cars/autonomy_datasets) to benchmark building blocks across different automated driving tasks
+- 🔄 **Unified ROS 2 Interface**: Evaluate any ROS system under test, on datasets, in simulation or live, using the benefits of the ROS 2 ecosystem
+- 🧩 **Pluggable Evaluations**: Select an evaluation by name, or bring your own from another package, reading any topics as inputs and, where needed, ground truth
+- 📊 **Established Metrics**: Use the provided evaluations, which follow the protocols of established challenges, with [Autonomy.Datasets](https://github.com/thinking-cars/autonomy_datasets) across different automated driving tasks
 - ⚡ **Efficient Data Pipeline**: Works seamlessly with preprocessed Rosbag files from [Autonomy.Datasets](https://github.com/thinking-cars/autonomy_datasets) for fast execution during development
 - 🐳 **Dockerized Environment**: Reproducible setup with all dependencies included
 - 🔌 **Modular Architecture**: Easy integration with other ROS 2 packages
 
-## Supported Benchmarks
+## Supported Evaluations
 
-This repository supports various automated driving evaluation benchmarks.
+This repository supports evaluations of various automated driving tasks.
 
 Detailed metric definitions and computation notes are documented in [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md).
 
-> [**Contributions**](docs/IMPLEMENTATION.md#adding-more-benchmarks) adding more benchmarks are welcome
+> [**Contributions**](docs/IMPLEMENTATION.md#adding-more-evaluations) adding more evaluations are welcome
 
-| Benchmark | Challenge | Dataset | Task |
+| Evaluation | Challenge | Dataset | Task |
 | --------- | --------- | ------- | ---- |
 | [**nuScenes 3D Lidar Object Detection**](docs/IMPLEMENTATION.md#3d-lidar-object-detection) | [![3D Object Detection Challenge](https://img.shields.io/badge/origin-3D_Object_Detection_Challenge-green)](https://www.nuscenes.org/object-detection) | [nuScenes](https://github.com/thinking-cars/autonomy_datasets) | 3D bounding box detection from lidar |
 
@@ -43,7 +44,7 @@ Detailed metric definitions and computation notes are documented in [docs/IMPLEM
 
 Clone [autonomy_datasets](https://github.com/thinking-cars/autonomy_datasets) and follow its setup instructions to prepare your dataset.
 
-Use the provided [docker-compose.yml](docker-compose.yml) to start the full pipeline — dataset publisher, system-under-test, and benchmark node:
+Use the provided [docker-compose.yml](docker-compose.yml) to start the full pipeline — dataset publisher, system under test, and evaluation node:
 
 ```bash
 # enable GUI output from Docker container
@@ -57,13 +58,13 @@ docker compose up -d
 docker compose down
 ```
 
-Configure the benchmark task and dataset via ROS launch arguments in [docker-compose.yml](docker-compose.yml):
+Configure the evaluation and dataset via ROS launch arguments in [docker-compose.yml](docker-compose.yml):
 
 ```yaml
-command: ros2 launch autonomy_benchmarks autonomy_benchmarks.launch.py benchmark:=nuscenes_lidar_object_detection prediction:=$your_prediction_topic label:=$your_label_topic request_samples:=/datasets/request_samples visualize:=true
+command: ros2 launch autonomy_evaluation autonomy_evaluation.launch.py evaluation:=nuscenes_lidar_object_detection prediction:=$your_prediction_topic label:=$your_label_topic request_samples:=/datasets/request_samples visualize:=true
 ```
 
-The benchmark node requests the samples it evaluates from the dataset node via its `request_samples` service, which publishes them and responds once they have been published. The dataset therefore publishes the next sample only once the system under test has processed the current one. As soon as all samples have been published, the benchmark aggregates its metrics per sample, per scene of the dataset and over the whole benchmark. See the [node documentation](autonomy_benchmarks/README.md#autonomy_benchmarks) for the sample request settings and the results.
+The evaluation node requests the samples it evaluates from the dataset node via its `request_samples` service, which publishes them and responds once they have been published. The dataset therefore publishes the next sample only once the system under test has processed the current one. As soon as all samples have been published, the node aggregates its metrics per scene of the dataset and over all evaluated samples. To evaluate samples published by others instead, e.g. by a closed-loop simulation, set `sample_source:=external`. See the [node documentation](autonomy_evaluation/README.md#autonomy_evaluation) for the topics of the evaluations, the sample settings and the results.
 
 ## 💻 Development
 
@@ -71,11 +72,11 @@ The benchmark node requests the samples it evaluates from the dataset node via i
 
 1. Clone the repository.
     ```bash
-    git clone https://github.com/thinking-cars/autonomy_benchmarks.git
+    git clone https://github.com/thinking-cars/autonomy_evaluation.git
     ```
 1. Initialize the [`.openads-dev-environment`](https://github.com/openads-project/openads-dev-environment) submodule containing development environment configuration.
     ```bash
-    cd autonomy_benchmarks
+    cd autonomy_evaluation
     git submodule update --init --recursive
     ```
 1. Open the repository in [Visual Studio Code](https://code.visualstudio.com).
@@ -108,11 +109,11 @@ colcon test-result --verbose
 
 ## 📝 Documentation
 
-Package and node interfaces are documented in the respective package READMEs listed below. Implementation details are found in the [Source Code Documentation](https://thinking-cars.github.io/autonomy_benchmarks).
+Package and node interfaces are documented in the respective package READMEs listed below. Implementation details are found in the [Source Code Documentation](https://thinking-cars.github.io/autonomy_evaluation).
 
 | Package | Description |
 | --- | --- |
-| [autonomy_benchmarks](autonomy_benchmarks/README.md) | Benchmarking suite for automated driving tasks |
+| [autonomy_evaluation](autonomy_evaluation/README.md) | Metrics-based evaluation of automated driving modules, generating the evidence for benchmarking automated driving deployments |
 
 ## ⚖️ Licensing
 

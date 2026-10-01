@@ -1,6 +1,6 @@
 # Implementation Details
 
-This repository supports the following benchmarks for object detection in automated driving systems:
+This repository supports the following evaluations of object detection in automated driving systems:
 
 - [nuScenes Challenge](#nuscenes-challenge): 3D lidar object detection
 
@@ -16,7 +16,7 @@ Supported Datasets:
 
 - [nuScenes Dataset](https://github.com/thinking-cars/autonomy_datasets/blob/main/docs/IMPLEMENTATION.md#nuscenes-dataset)
 
-> This benchmark uses [nuScenes Dataset](https://github.com/thinking-cars/autonomy_datasets/blob/main/docs/IMPLEMENTATION.md#nuscenes-dataset) via the [autonomy_datasets](https://github.com/thinking-cars/autonomy_datasets) ROS package.
+> This evaluation uses [nuScenes Dataset](https://github.com/thinking-cars/autonomy_datasets/blob/main/docs/IMPLEMENTATION.md#nuscenes-dataset) via the [autonomy_datasets](https://github.com/thinking-cars/autonomy_datasets) ROS package.
 
 [![3D Object Detection Challenge](https://img.shields.io/badge/origin-3D_Object_Detection_Challenge-green)](https://www.nuscenes.org/object-detection) ![2019](https://img.shields.io/badge/published-2019-green)
 
@@ -99,14 +99,42 @@ Metrics are computed based on the following assumptions:
 
 </details>
 
-### Adding more Benchmarks
+### Adding more Evaluations
 
-To contribute a new benchmark for a dataset or evaluation protocol:
+An evaluation declares the topics it reads and computes metrics from their messages. It may read the topics of the system under test only, e.g. the ego state and the surrounding objects to evaluate a closed-loop planner by its time to collision, or compare them with ground truth, e.g. the predictions of a perception algorithm with the labels of a dataset. The node subscribes to all declared topics, matches their messages into samples by their stamp, and passes the messages of each sample by the names of their topics.
 
-1. Create a new benchmark class in [autonomy_benchmarks/benchmarks/](../autonomy_benchmarks/autonomy_benchmarks/benchmarks/) that inherits from `AutonomyBenchmark`.
-2. Implement the three abstract methods: `required_inputs()`, `compute_sample_metrics()`, and `compute_aggregated_metrics()`.
-3. Configure the benchmark in `__init__` (thresholds, per-class ranges, and metric rules as instance attributes); keep static lookup tables (e.g. category-to-class mappings) as module-level `_CONSTANT_NAME` constants.
-4. Register the benchmark in the node's handler dispatch in [autonomy_benchmarks.py](../autonomy_benchmarks/autonomy_benchmarks/autonomy_benchmarks.py) so it can be selected via the `benchmark:=<name>` launch argument.
-5. Add comprehensive tests in [tests/benchmarks/](../autonomy_benchmarks/tests/benchmarks/) following existing test patterns.
-6. Update documentation with benchmark details, metrics table, and dataset requirements.
-7. Create a [Pull Request](https://github.com/thinking-cars/autonomy_benchmarks-internal/pulls) on GitHub and wait for maintainer feedback.
+To contribute a new evaluation for a dataset or evaluation protocol:
+
+1. Create a new evaluation class in [autonomy_evaluation/evaluations/](../autonomy_evaluation/autonomy_evaluation/evaluations/) that inherits from `Evaluation`.
+2. Declare the topics it reads, each by the name it is configured with, e.g. `prediction:=/topic`, mapped to its ROS message type:
+   - `required_inputs()`: the topics of the system under test that are evaluated (required).
+   - `required_ground_truth()`: the reference the inputs are compared with, e.g. dataset labels (optional, none by default).
+   - `derived_topics()`: topics published next to another one, e.g. meta information on `<label topic>/meta_info`, which follow that topic instead of being configured on their own (optional).
+3. Implement `compute_sample_metrics()`, whose parameters are named after the declared topics, and `compute_aggregated_metrics()`. Optionally, implement `visualization_outputs()` and `visualize_sample()` to publish a per-sample visualization for RViz.
+4. Configure the evaluation in `__init__` (thresholds, per-class ranges, and metric rules as instance attributes); keep static lookup tables (e.g. category-to-class mappings) as module-level `_CONSTANT_NAME` constants.
+5. Register the evaluation in `EVALUATIONS` of [registry.py](../autonomy_evaluation/autonomy_evaluation/evaluations/registry.py) so it can be selected via the `evaluation:=<name>` launch argument, add comprehensive tests in [tests/evaluations/](../autonomy_evaluation/tests/evaluations/) following existing test patterns, and update the documentation with evaluation details, metrics table, dataset requirements, and the topics it reads.
+6. Create a [Pull Request](https://github.com/thinking-cars/autonomy_evaluation/pulls) on GitHub and wait for maintainer feedback.
+
+An evaluation that is specific to a system under test can also stay in a package of its own. The node loads it by its module and class, e.g. `evaluation:=my_package.evaluations:TimeToCollision`, as long as the module is importable in the environment of the node:
+
+```python
+from typing import Any, Dict, List, Optional
+
+from autonomy_evaluation.evaluations import Evaluation
+from perception_msgs.msg import EgoData, ObjectList
+
+
+class TimeToCollision(Evaluation):
+    def __init__(self) -> None:
+        super().__init__(name="time_to_collision", description="time to collision of a closed-loop planner")
+
+    def required_inputs(self) -> Dict[str, Any]:
+        # inputs only: the metric needs no ground truth
+        return {"ego_data": EgoData, "objects": ObjectList}
+
+    def compute_sample_metrics(self, ego_data: EgoData, objects: ObjectList, sample_id: Optional[str] = None) -> Dict[str, Any]:
+        return {"ttc": ...}
+
+    def compute_aggregated_metrics(self, sample_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        return {"min_ttc": min(entry["metrics"]["ttc"] for entry in sample_results)}
+```
