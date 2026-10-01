@@ -9,8 +9,10 @@ as an unparsable value stops the node, the topics the inputs of an evaluation ar
 the stamping of received messages, the matching of the received input messages into the samples
 to evaluate, which has to hold up when the dataset continues with a scene that was recorded before
 the scene played before it and has to match topics of a simulation within a tolerance, the
-evaluation of a sample, which requests the next samples unless others publish them, and the
-finalization of the results, which reports the samples of an interrupted evaluation as incomplete.
+evaluation of a sample, which requests the next samples unless others publish them, advancing the
+evaluation until it finishes, which it also has to once the dataset node has shut down after its
+last sample, and the finalization of the results, which reports the samples of an interrupted
+evaluation as incomplete.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from collections import deque
 from types import SimpleNamespace
 
 import pytest
+from autonomy_evaluation import autonomy_evaluation
 from autonomy_evaluation.autonomy_evaluation import AutonomyEvaluation, parse_sample_ids, SampleSynchronizer
 
 _TOPICS = ["prediction", "label", "label_meta_info"]
@@ -310,6 +313,125 @@ class TestEvaluateSample:
         assert node.num_advances == 0
         # the scenes are only reported to whoever published the samples, so no sample waits for one
         assert not node.samples_awaiting_scene
+
+
+class _FakeRequestClient:
+    """Stand in for the client of the sample request service of the dataset."""
+
+    def __init__(self, ready: bool):
+        """Start with the service available or not."""
+        self.ready = ready
+        self.removed_requests: list = []
+
+    def service_is_ready(self) -> bool:
+        """Report whether the dataset node offers the service."""
+        return self.ready
+
+    def remove_pending_request(self, future) -> None:
+        """Record a request that is given up on."""
+        self.removed_requests.append(future)
+
+
+def _advancing_node(service_ready: bool, dataset_available: bool = True, publishing_finished: bool = False):
+    """Stub the node state that advancing the evaluation reads, recording what the evaluation does next."""
+    node = SimpleNamespace(
+        evaluation_finished=False,
+        pending_request=None,
+        publishing_finished=publishing_finished,
+        dataset_available=dataset_available,
+        dataset_unavailable_since=None,
+        sample_request_client=_FakeRequestClient(ready=service_ready),
+        sample_request_service="/datasets/request_samples",
+        actions=[],
+        get_logger=lambda logger=_FakeLogger(): logger,
+    )
+    node.track_dataset_availability = lambda: AutonomyEvaluation.track_dataset_availability(node)
+    node.awaiting_evaluations = lambda: False
+    node.request_samples = lambda: node.actions.append("request")
+    node.finalize_evaluation = lambda: node.actions.append("finalize")
+    node.shutdown = lambda: node.actions.append("shutdown")
+    return node
+
+
+class TestAdvanceEvaluation:
+    """Tests requesting further samples and finishing the evaluation, with and without the dataset node."""
+
+    @pytest.fixture
+    def clock(self, monkeypatch) -> list:
+        """Control the steady clock the node measures how long the dataset has been gone with."""
+        now = [100.0]
+        monkeypatch.setattr(autonomy_evaluation.time, "monotonic", lambda: now[0])
+        return now
+
+    def test_requests_samples_while_the_dataset_is_available(self):
+        """The next samples are requested as soon as the previous ones have been evaluated."""
+        node = _advancing_node(service_ready=True, dataset_available=False)
+
+        AutonomyEvaluation.advance_evaluation(node)
+
+        assert node.actions == ["request"]
+        assert node.dataset_available
+
+    def test_waits_for_a_dataset_that_has_not_started_yet(self, clock):
+        """A dataset node that never offered its service is waited for, however long it takes."""
+        node = _advancing_node(service_ready=False, dataset_available=False)
+
+        clock[0] += 3600.0
+        AutonomyEvaluation.advance_evaluation(node)
+
+        assert node.actions == []
+        assert not node.publishing_finished
+
+    def test_finishes_after_the_dataset_reported_its_end_and_shut_down(self):
+        """The service is only needed to request samples, not to finish once publishing has ended."""
+        node = _advancing_node(service_ready=False, publishing_finished=True)
+
+        AutonomyEvaluation.advance_evaluation(node)
+
+        assert node.actions == ["finalize", "shutdown"]
+
+    def test_finishes_once_the_dataset_shut_down_after_its_last_sample(self, clock):
+        """A dataset gone for longer than the grace period publishes no further samples."""
+        node = _advancing_node(service_ready=False)
+
+        AutonomyEvaluation.advance_evaluation(node)
+        clock[0] += autonomy_evaluation._DATASET_SHUTDOWN_GRACE_PERIOD_S / 2
+        AutonomyEvaluation.advance_evaluation(node)
+
+        # within the grace period, a response the dataset sent before shutting down may still arrive
+        assert node.actions == []
+
+        clock[0] += autonomy_evaluation._DATASET_SHUTDOWN_GRACE_PERIOD_S
+        AutonomyEvaluation.advance_evaluation(node)
+
+        assert node.actions == ["finalize", "shutdown"]
+
+    def test_continues_with_a_dataset_that_is_back_within_the_grace_period(self, clock):
+        """A service that is briefly unavailable does not end the evaluation."""
+        node = _advancing_node(service_ready=False)
+        AutonomyEvaluation.advance_evaluation(node)
+        clock[0] += autonomy_evaluation._DATASET_SHUTDOWN_GRACE_PERIOD_S / 2
+
+        node.sample_request_client.ready = True
+        AutonomyEvaluation.advance_evaluation(node)
+        clock[0] += autonomy_evaluation._DATASET_SHUTDOWN_GRACE_PERIOD_S
+        AutonomyEvaluation.advance_evaluation(node)
+
+        assert node.actions == ["request", "request"]
+        assert not node.publishing_finished
+
+    def test_gives_up_on_a_request_the_shut_down_dataset_did_not_answer(self, clock):
+        """A request pending when the dataset shut down would never be answered."""
+        node = _advancing_node(service_ready=False)
+        request = node.pending_request = object()
+
+        AutonomyEvaluation.advance_evaluation(node)
+        clock[0] += 2 * autonomy_evaluation._DATASET_SHUTDOWN_GRACE_PERIOD_S
+        AutonomyEvaluation.advance_evaluation(node)
+
+        assert node.sample_request_client.removed_requests == [request]
+        assert node.pending_request is None
+        assert node.actions == ["finalize", "shutdown"]
 
 
 class TestReceiveMessage:

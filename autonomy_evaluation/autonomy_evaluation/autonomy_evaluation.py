@@ -29,6 +29,11 @@ _REQUEST_TIMER_PERIOD_S = 0.5
 # Interval in seconds at which waiting for the sample request service of the dataset is logged
 _SERVICE_WAIT_LOG_INTERVAL_S = 10.0
 
+# Seconds for which the sample request service of a dataset that has been available must be gone
+# before the dataset node is considered to have shut down, which lets a response that the dataset
+# sent just before shutting down still arrive
+_DATASET_SHUTDOWN_GRACE_PERIOD_S = 2.0
+
 # Number of samples whose messages are kept while they wait for the messages of their remaining
 # evaluation inputs
 _SYNCHRONIZER_QUEUE_SIZE = 10
@@ -439,6 +444,10 @@ class AutonomyEvaluation(Node):
         self.pending_request: Optional[Future] = None
         self.evaluation_deadline: Optional[float] = None
         self.publishing_finished = False
+        # whether the sample request service of the dataset has been available, and since when it
+        # is gone, to tell a dataset node that has not started yet from one that has shut down
+        self.dataset_available = False
+        self.dataset_unavailable_since: Optional[float] = None
         self.evaluation_finished = False
         self.num_evaluated_samples = 0
 
@@ -456,6 +465,8 @@ class AutonomyEvaluation(Node):
             return
 
         self.sample_request_client = self.create_client(RequestSamples, "~/request_samples")
+        # name of the service with remappings applied, for the log messages
+        self.sample_request_service = self.resolve_service_name(self.sample_request_client.srv_name)
         # driven by a steady clock, so that the evaluation also advances while the simulation clock
         # of the dataset stands still, i.e. while no sample is being published
         self.request_timer = self.create_timer(
@@ -463,7 +474,7 @@ class AutonomyEvaluation(Node):
             self.advance_evaluation,
             clock=Clock(clock_type=ClockType.STEADY_TIME),
         )
-        self.get_logger().info(f"Requesting samples to evaluate from '{self.sample_request_client.srv_name}'")
+        self.get_logger().info(f"Requesting samples to evaluate from '{self.sample_request_service}'")
 
     def input_topic(self, name: str, derived_topics: dict[str, tuple[str, str]]) -> str:
         """Determines the topic an input of the evaluation is subscribed on
@@ -489,23 +500,59 @@ class AutonomyEvaluation(Node):
         """Requests the next samples to evaluate, or finalizes the evaluation once all were published
 
         Called periodically as well as whenever a request has been answered or a sample has been
-        evaluated, and does nothing while the evaluation is waiting for one of those.
+        evaluated, and does nothing while the evaluation is waiting for one of those. The service
+        of the dataset is only needed to request further samples, so the evaluation finishes even
+        after the dataset node has shut down.
         """
-        if self.evaluation_finished or self.pending_request is not None:
+        if self.evaluation_finished:
             return
-        if not self.sample_request_client.service_is_ready():
-            self.get_logger().warn(
-                f"Waiting for service '{self.sample_request_client.srv_name}' to request samples of the dataset...",
-                throttle_duration_sec=_SERVICE_WAIT_LOG_INTERVAL_S,
-            )
-            return
-        if self.awaiting_evaluations():
+        self.track_dataset_availability()
+        if self.pending_request is not None or self.awaiting_evaluations():
             return
         if self.publishing_finished:
             self.finalize_evaluation()
             self.shutdown()
             return
-        self.request_samples()
+        if not self.dataset_available:
+            self.get_logger().warn(
+                f"Waiting for service '{self.sample_request_service}' to request samples of the dataset...",
+                throttle_duration_sec=_SERVICE_WAIT_LOG_INTERVAL_S,
+            )
+            return
+        if self.dataset_unavailable_since is None:
+            self.request_samples()
+
+    def track_dataset_availability(self):
+        """Ends publishing once the dataset node has shut down
+
+        The dataset node shuts down after it has published its last sample, without necessarily
+        reporting the end of the dataset: a request that publishes the last sample is answered
+        before the dataset notices that no sample follows. Once the service of a dataset that has
+        been available is gone for longer than a grace period, no further samples can be
+        published, so the samples published so far are the ones to evaluate. A request that the
+        dataset did not answer before it went away is given up on.
+        """
+        if self.sample_request_client.service_is_ready():
+            self.dataset_available = True
+            self.dataset_unavailable_since = None
+            return
+        if not self.dataset_available or self.publishing_finished:
+            return
+        now = time.monotonic()
+        if self.dataset_unavailable_since is None:
+            self.dataset_unavailable_since = now
+        if now - self.dataset_unavailable_since < _DATASET_SHUTDOWN_GRACE_PERIOD_S:
+            return
+
+        if self.pending_request is not None:
+            self.sample_request_client.remove_pending_request(self.pending_request)
+            self.pending_request = None
+            self.get_logger().warn("The dataset node shut down before answering the last request for samples")
+        self.get_logger().info(
+            f"The dataset node providing '{self.sample_request_service}' has shut down, finishing with the "
+            "samples it published"
+        )
+        self.publishing_finished = True
 
     def awaiting_evaluations(self) -> bool:
         """Reports whether published samples are still waiting to be evaluated
