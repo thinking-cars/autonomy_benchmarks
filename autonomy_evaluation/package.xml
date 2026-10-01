@@ -4,7 +4,7 @@
 
   <name>autonomy_evaluation</name>
   <version>1.0.0</version>
-  <description>Metrics-based evaluation of automated driving tasks, generating the evidence for benchmarking automated driving deployments</description>
+  <description>Metrics-based evaluation of automated driving modules, generating the evidence for benchmarking automated driving deployments</description>
 
   <maintainer email="hu@thinking-cars.de">Haohao Hu</maintainer>
   <maintainer email="vankempen@thinking-cars.de">Raphael van Kempen</maintainer>

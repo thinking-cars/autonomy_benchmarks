@@ -113,7 +113,7 @@ Package and node interfaces are documented in the respective package READMEs lis
 
 | Package | Description |
 | --- | --- |
-| [autonomy_evaluation](autonomy_evaluation/README.md) | Metrics-based evaluation of automated driving tasks, generating the evidence for benchmarking automated driving deployments |
+| [autonomy_evaluation](autonomy_evaluation/README.md) | Metrics-based evaluation of automated driving modules, generating the evidence for benchmarking automated driving deployments |
 
 ## ⚖️ Licensing
 
