@@ -31,9 +31,9 @@ Detailed metric definitions and computation notes are documented in [docs/IMPLEM
 
 > [**Contributions**](docs/IMPLEMENTATION.md#adding-more-evaluations) adding more evaluations are welcome
 
-| Evaluation | Datasets | Task |
-| ---------- | -------- | ---- |
-| [**3D Object Detection**](docs/IMPLEMENTATION.md#3d-object-detection) | All [Autonomy.Datasets](https://github.com/thinking-cars/autonomy_datasets) with 3D object labels | 3D bounding box detection on the classes of `perception_msgs/ObjectClassification` |
+| Evaluation | Datasets | Task | Preview |
+| ---------- | -------- | ---- | ------- |
+| [**3D Object Detection**](docs/IMPLEMENTATION.md#3d-object-detection) | All [Autonomy.Datasets](https://github.com/thinking-cars/autonomy_datasets) with 3D object labels | 3D bounding box detection on the classes of `perception_msgs/ObjectClassification` | ![Rviz Screenshot 3D Object Detection evaluation](./docs/assets/3d-object-detection.png)
 
 <p align="center">
   <strong>🚀 <a href="#-quick-start">Quick Start</a></strong> • <strong>💻 <a href="#-development">Development</a></strong> • <strong>📝 <a href="#-documentation">Documentation</a></strong>
