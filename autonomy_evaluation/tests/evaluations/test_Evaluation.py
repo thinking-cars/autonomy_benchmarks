@@ -209,13 +209,13 @@ class TestFinalize:
 
         assert results["num_samples"] == 3
         assert results["num_scenes"] == 2
-        assert results["aggregated_metrics"] == {"num_predictions": 7, "num_labels": 9}
-        assert results["scene_results"]["scene_a"] == {
+        assert results["metrics"] == {"num_predictions": 7, "num_labels": 9}
+        assert results["scenes"]["scene_a"] == {
             "num_samples": 2,
             "sample_ids": ["0", "1"],
-            "aggregated_metrics": {"num_predictions": 3, "num_labels": 4},
+            "metrics": {"num_predictions": 3, "num_labels": 4},
         }
-        assert results["scene_results"]["scene_b"]["aggregated_metrics"] == {"num_predictions": 4, "num_labels": 5}
+        assert results["scenes"]["scene_b"]["metrics"] == {"num_predictions": 4, "num_labels": 5}
         # The metrics of the single samples are no longer reported alongside the aggregated
         # results, while 'sample_results' is commented out in Evaluation.finalize()
         # assert [entry["metrics"] for entry in results["sample_results"]] == [
@@ -234,9 +234,9 @@ class TestFinalize:
             ]
         ).finalize()
 
-        assert results["scene_results"]["scene_a"]["sample_ids"] == ["0", "2"]
-        assert results["scene_results"]["scene_a"]["aggregated_metrics"]["num_predictions"] == 5
-        assert results["scene_results"]["scene_b"]["sample_ids"] == ["1"]
+        assert results["scenes"]["scene_a"]["sample_ids"] == ["0", "2"]
+        assert results["scenes"]["scene_a"]["metrics"]["num_predictions"] == 5
+        assert results["scenes"]["scene_b"]["sample_ids"] == ["1"]
 
     def test_samples_without_a_scene_are_only_aggregated_over_the_evaluation(self):
         """A sample that cannot be attributed to a scene still counts for the whole evaluation."""
@@ -244,8 +244,8 @@ class TestFinalize:
 
         assert results["num_samples"] == 2
         assert results["num_scenes"] == 1
-        assert results["aggregated_metrics"]["num_predictions"] == 3
-        assert results["scene_results"]["scene_a"]["aggregated_metrics"]["num_predictions"] == 1
+        assert results["metrics"]["num_predictions"] == 3
+        assert results["scenes"]["scene_a"]["metrics"]["num_predictions"] == 1
 
     def test_aggregates_an_evaluation_of_inputs_only(self):
         """Samples of an evaluation without ground truth are recorded from their inputs alone."""
@@ -255,15 +255,15 @@ class TestFinalize:
 
         results = evaluation.finalize()
 
-        assert results["aggregated_metrics"] == {"min_distance": 2.5}
-        assert results["scene_results"]["scene_a"]["num_samples"] == 2
+        assert results["metrics"] == {"min_distance": 2.5}
+        assert results["scenes"]["scene_a"]["num_samples"] == 2
 
     def test_reports_no_scene_without_recorded_scenes(self):
         """Samples recorded without a scene aggregate to no scene results at all."""
         results = _evaluation_of([("0", None, 1, 0)]).finalize()
 
         assert results["num_scenes"] == 0
-        assert results["scene_results"] == {}
+        assert results["scenes"] == {}
 
 
 class TestSaveResults:
@@ -276,8 +276,8 @@ class TestSaveResults:
         output_path = evaluation.save_results(str(tmp_path / "results" / "counting.json"))
 
         stored = json.loads(open(output_path).read())
-        assert stored["aggregated_metrics"] == {"num_predictions": 3, "num_labels": 3}
-        assert sorted(stored["scene_results"]) == ["scene_a", "scene_b"]
+        assert stored["metrics"] == {"num_predictions": 3, "num_labels": 3}
+        assert sorted(stored["scenes"]) == ["scene_a", "scene_b"]
         # The single samples are no longer written alongside the aggregated
         # results, while 'sample_results' is commented out in Evaluation.finalize()
         # assert [entry["sample_id"] for entry in stored["sample_results"]] == ["0", "1"]
@@ -289,7 +289,7 @@ class TestSaveResults:
 
         output_path = evaluation.save_results(str(tmp_path / "counting.json"), results=results)
 
-        assert json.loads(open(output_path).read())["aggregated_metrics"] == results["aggregated_metrics"]
+        assert json.loads(open(output_path).read())["metrics"] == results["metrics"]
 
 
 class TestIncompleteResults:
@@ -306,7 +306,7 @@ class TestIncompleteResults:
         assert results["complete"] is False
         # the samples that were evaluated are still reported
         assert results["num_samples"] == 1
-        assert results["aggregated_metrics"] == {"num_predictions": 1, "num_labels": 1}
+        assert results["metrics"] == {"num_predictions": 1, "num_labels": 1}
 
     def test_writes_incomplete_results_to_the_results_file(self, tmp_path):
         """The results file of an interrupted evaluation marks the results it holds as incomplete."""
@@ -316,7 +316,7 @@ class TestIncompleteResults:
 
         stored = json.loads(open(output_path).read())
         assert stored["complete"] is False
-        assert stored["aggregated_metrics"] == {"num_predictions": 1, "num_labels": 1}
+        assert stored["metrics"] == {"num_predictions": 1, "num_labels": 1}
 
     def test_written_results_keep_the_flag_they_were_finalized_with(self, tmp_path):
         """A given payload is written as it is, marked the way it was finalized."""

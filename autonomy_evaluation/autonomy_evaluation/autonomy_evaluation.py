@@ -726,7 +726,7 @@ class AutonomyEvaluation(Node):
             return
 
         results = self.evaluation_handler.finalize(complete=complete)
-        aggregated_metrics = json.dumps(results["aggregated_metrics"], indent=2, default=str)
+        aggregated_metrics = json.dumps(results["metrics"], indent=2, default=str)
         evaluated_samples = f"{results['num_samples']} evaluated sample(s) of {results['num_scenes']} scene(s)"
         if complete:
             self.get_logger().info(f"Evaluation '{self.evaluation}' finished after {evaluated_samples}.")

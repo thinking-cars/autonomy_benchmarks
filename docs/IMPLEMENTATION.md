@@ -63,15 +63,15 @@ Metrics are computed based on the following assumptions:
   </details>
 
 - **Bike racks**: bicycles and motorcycles are removed from predictions and labels if their center falls inside the footprint of a bike rack. Bike racks are recognized by their `original_class` (`static_object.bicycle_rack`) in the optional label meta information, as published for nuScenes and MAN TruckScenes.
-- **Average precision**: for each match threshold, the average precision (`ap`) is calculated by integrating the recall-precision curve for recalls **and** precisions `> 0.1` (points at or below either threshold are excluded). The mean average precision (`map`) is the average over match thresholds and evaluated classes with labels; an evaluated class without labels has no AP, so its predictions do not dilute the `map`. Evaluated classes with labels that the model never predicts count with AP 0.
+- **Average precision**: for each match threshold, the average precision (`ap`) is calculated by integrating the recall-precision curve for recalls **and** precisions `> 0.1` (points at or below either threshold are excluded). The mean average precision (mAP) is the average over match thresholds and evaluated classes with labels; an evaluated class without labels has no AP, so its predictions do not dilute the mAP. Evaluated classes with labels that the model never predicts count with AP 0.
 - **True positive metrics** (`ate`, ...) are calculated using a match threshold of `2.0 m`. The velocity error `ave` is only computed against labels whose velocity is set: `perception_msgs` marks a state entry that is not set with `CONTINUOUS_STATE_COVARIANCE_INVALID` on the diagonal of the state covariance. Without any label with velocity, `ave` is unavailable.
-- **Detection score**: `detection_score = (5·map + Σ max(1−m{metric},0)) / (5 + number of TP metrics)` over the available TP metrics `ate`, `ase`, `aoe` and `ave`, i.e. the formula of the nuScenes detection score (NDS) without the attribute error.
+- **Detection score**: `(5·mAP + Σ max(1−m{metric},0)) / (5 + number of TP metrics)` over the available TP metrics `ate`, `ase`, `aoe` and `ave`, i.e. the formula of the nuScenes detection score (NDS) without the attribute error.
 
 #### Deviations from the nuScenes reference
 
 - **Classes**: the classes of `perception_msgs/ObjectClassification` replace the 10 nuScenes detection classes, e.g. trucks, trailers and construction vehicles are evaluated together as `utility`, barriers and traffic cones are not evaluated, and strollers, wheelchairs, personal mobility devices, animals and emergency vehicles are. Classes without labels in the evaluated samples are skipped instead of entering the mean with AP 0.
-- **Attributes**: `perception_msgs/Object` cannot carry attributes, so the attribute error `aae` is not evaluated and the `detection_score` is not comparable to the official NDS.
-- **Velocities**: as nuScenes skips labels whose velocity cannot be determined, the velocity error skips labels whose velocity is not marked as set in their state covariance. Without any such label, `ave` is left out of the `detection_score` instead of counting as error 1.
+- **Attributes**: `perception_msgs/Object` cannot carry attributes, so the attribute error `aae` is not evaluated and the detection score is not comparable to the official NDS.
+- **Velocities**: as nuScenes skips labels whose velocity cannot be determined, the velocity error skips labels whose velocity is not marked as set in their state covariance. Without any such label, `ave` is left out of the detection score instead of counting as error 1.
 - **Label filters**: the evaluation does not filter labels by their number of points. autonomy_datasets publishes lidar labels with at least `min_lidar_points_in_bbox` lidar points (default `1`), so labels that only radar points fall into are missing. Bike racks are only known if their labels are published, and their footprint is checked in 2D.
 - **Ranges** are measured from the origin of the frame the objects are given in, e.g. the lidar, instead of the ego vehicle.
 - **TP errors** are interpolated over the recall of all predictions instead of over their confidence.
@@ -80,31 +80,26 @@ Metrics are computed based on the following assumptions:
 <details>
 <summary>Output metrics</summary>
 
-`{class}` is an evaluated class, e.g. `car` or `pedestrian|vru`.
+The results hold the `metrics` over all evaluated samples and, under `scenes`, the `num_samples`, `sample_ids` and `metrics` of each scene. Each metric holds its aggregated value under `_value_`, next to its sub-metrics per match threshold or per evaluated class `{class}`, e.g. `car` or `pedestrian|vru`.
 
 | Metric | Description |
 | - | - |
-| `ap_0.5_{class}` | Average precision for class with maximum match distance of 0.5 meters. |
-| `ap_1.0_{class}` | Average precision for class with maximum match distance of 1 meter. |
-| `ap_2.0_{class}` | Average precision for class with maximum match distance of 2 meters. |
-| `ap_4.0_{class}` | Average precision for class with maximum match distance of 4 meters. |
-| `map_{class}` | Mean average precision for class over all match distance thresholds. |
-| `map` | Mean average precision over all match distance thresholds and all evaluated classes, `null` without labels. |
-| `ate_2.0_{class}` | Average translation error for class as Euclidean distance in meters. |
-| `mate_2.0` | Mean average translation error over all evaluated classes. |
-| `ase_2.0_{class}` | Average scale error for class as `1 - IoU` after aligning centers and orientation. |
-| `mase_2.0` | Mean average scale error over all evaluated classes. |
-| `aoe_2.0_{class}` | Average orientation error for class as smallest yaw angle difference between prediction and ground truth in radians. |
-| `maoe_2.0` | Mean average orientation error over all evaluated classes. |
-| `ave_2.0_{class}` | Average velocity error for class as absolute velocity error in `m/s`, `null` if no label of the class has a velocity. |
-| `mave_2.0` | Mean average velocity error over all evaluated classes, `null` if no label has a velocity. |
-| `detection_score` | Detection score combining `map` and the available TP errors with weights 5-1-1-1-1, normalised by the sum of the weights: `(5·mAP + Σ max(1−mTP,0)) / (5 + number of TP errors)`. |
-| `detection_score_tp_metrics` | TP errors the `detection_score` includes, i.e. `ate`, `ase`, `aoe` and, if labels have velocities, `ave`. |
-| `evaluated_classes` | Evaluated classes with labels, over which `map`, the mean TP errors and the `detection_score` are computed. |
-| `classes_without_predictions` | Evaluated classes with labels that the model never predicted, which count with AP 0. |
-| `classes_without_ground_truth` | Evaluated classes with predictions but without labels, whose predictions do not enter the metrics. |
+| `_value_` | Detection score combining the mAP and the available mean TP errors with weights 5-1-1-1-1, normalised by the sum of the weights: `(5·mAP + Σ max(1−mTP,0)) / (5 + number of TP errors)`, `null` without labels. |
+| `num_labels._value_` | Number of positive labels, i.e. without don't-care labels. |
+| `num_labels.{class}._value_` | Number of positive labels of the class, for every evaluated class with labels or predictions. A class with predictions but `0` labels has no AP and TP errors, so its predictions do not enter the metrics. |
+| `num_labels.{class}.{classes}` | Number of positive labels of the class by their possible classes `{classes}`, joined by `\|`, e.g. NVIDIA's persons as `pedestrian\|vru` and its strollers as `vru` within `pedestrian\|vru`. |
+| `num_predictions._value_` | Number of predictions of an evaluated class. |
+| `num_predictions.{class}` | Number of predictions of the class, for every evaluated class with labels or predictions; a prediction of classes of several evaluated classes counts for each of them. A class with labels but `0` predictions counts with AP 0. |
+| `ap._value_` | Mean average precision over all match distance thresholds and all evaluated classes with labels, `null` without labels. |
+| `ap.classes.{class}` | Mean average precision of the class over all match distance thresholds. |
+| `ap.dist_{threshold}._value_` | Mean average precision over all evaluated classes with labels, with a maximum match distance of `{threshold}` meters (`0.5`, `1.0`, `2.0`, `4.0`). |
+| `ap.dist_{threshold}.classes.{class}` | Average precision of the class with a maximum match distance of `{threshold}` meters. |
+| `ate._value_`, `ate.{class}` | Average translation error as Euclidean distance in meters, mean over the evaluated classes with labels and per class. |
+| `ase._value_`, `ase.{class}` | Average scale error as `1 - IoU` after aligning centers and orientation. |
+| `aoe._value_`, `aoe.{class}` | Average orientation error as smallest yaw angle difference between prediction and ground truth in radians. |
+| `ave._value_`, `ave.{class}` | Average velocity error as absolute velocity error in `m/s`, `null` for a class without labels with velocity and as mean if no label has a velocity. |
 
-Next to the `score`, the results list every evaluated class with labels or predictions under `classes`, with its `members`, the possible classes of its labels (`label_classes`), and its numbers of labels and predictions.
+The TP errors are measured with a maximum match distance of 2 meters; their means skip `null` classes.
 
 </details>
 

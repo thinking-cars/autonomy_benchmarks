@@ -156,7 +156,9 @@ class Evaluation(ABC):
         Returns
         -------
         A dictionary mapping aggregated metric names to their values (e.g.
-        mean-AP, precision, recall).
+        mean-AP, precision, recall).  A metric composed of sub-metrics is a
+        nested dictionary that holds its aggregated value under ``_value_``
+        next to its sub-metrics.
         """
 
     # ------------------------------------------------------------------
@@ -276,9 +278,9 @@ class Evaluation(ABC):
     def finalize(self, complete: bool = True) -> Dict[str, Any]:
         """Compute aggregated metrics and return the full results payload.
 
-        Metrics are reported on three levels: ``aggregated_metrics`` over all
-        evaluated samples, ``scene_results`` over the samples of each scene, and
-        ``sample_results`` for every single sample.
+        Metrics are reported on two levels: ``metrics`` over all evaluated
+        samples, and the ``metrics`` of each scene in ``scenes`` over the
+        samples of that scene.
 
         Parameters
         ----------
@@ -297,12 +299,12 @@ class Evaluation(ABC):
             "complete": complete,
             "num_samples": len(self._sample_results),
             "num_scenes": len(scenes),
-            "aggregated_metrics": aggregated,
-            "scene_results": {
+            "metrics": aggregated,
+            "scenes": {
                 scene_id: {
                     "num_samples": len(entries),
                     "sample_ids": [entry["sample_id"] for entry in entries],
-                    "aggregated_metrics": self.compute_aggregated_metrics(entries),
+                    "metrics": self.compute_aggregated_metrics(entries),
                 }
                 for scene_id, entries in scenes.items()
             },

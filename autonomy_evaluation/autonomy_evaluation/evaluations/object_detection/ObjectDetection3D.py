@@ -513,13 +513,17 @@ class ObjectDetection3D(Evaluation):
                 :meth:`record_sample`.
 
         Returns:
-            A dict containing ``classes`` (members, label classes and numbers of
-            labels and predictions of every evaluated class that has labels or
-            predictions), ``threshold_metrics`` (per-threshold AP / mAP with the
-            P-R filter), ``tp_metrics`` (per-class ATE, ASE, AOE, AVE at the
-            2 m threshold), and ``score`` (flat mAP and detection score
-            summary). Metrics are reported for the evaluated classes with
-            labels only.
+            The metrics, each holding its aggregated value under ``_value_``
+            next to its sub-metrics: the detection score (``_value_``), the
+            numbers of positive labels (``num_labels``) and of predictions
+            (``num_predictions``) in total and per evaluated class with labels
+            or predictions, the labels of each class also by their possible
+            classes joined with ``|``, the AP (``ap``) as mAP over all
+            thresholds, per class (``classes``) and per threshold
+            (``dist_{threshold}``) as mAP with the AP of each class under
+            ``classes``, and the TP errors at the 2 m threshold (``ate``,
+            ``ase``, ``aoe``, ``ave``) as mean and per class. AP and TP errors
+            are reported for the evaluated classes with labels only.
         """
 
         all_metrics = [entry["metrics"] for entry in sample_results]
@@ -535,31 +539,33 @@ class ObjectDetection3D(Evaluation):
         num_labels = self._counts_by_evaluated_class(label_counts, class_of)
         num_velocity_labels = self._counts_by_evaluated_class(velocity_label_counts, class_of)
         num_predictions = self._counts_by_evaluated_class(prediction_counts, class_of)
-        # Metrics are computed for the evaluated classes with labels, in the order of their classes.
+        # Objects are counted for the evaluated classes with labels or predictions, metrics are computed for those with
+        # labels, both in the order of their classes.
+        counted_classes = [name for name in evaluated_classes if num_labels.get(name) or num_predictions.get(name)]
         num_labels = {name: num_labels[name] for name in evaluated_classes if num_labels.get(name)}
+        # The labels of each evaluated class by their possible classes, which all belong to it, e.g. NVIDIA's persons
+        # as "pedestrian|vru" and its strollers as "vru" within "pedestrian|vru".
+        label_classes: Dict[str, Dict[str, int]] = {name: {} for name in counted_classes}
+        for key, count in label_counts.items():
+            label_classes[class_of[key.split(_CLASS_SEPARATOR)[0]]][key] = count
 
         entries = self._entries_by_evaluated_class(all_metrics, class_of)
-        threshold_metrics = self._compute_threshold_metrics(entries, num_labels)
+        ap = self._compute_ap(entries, num_labels)
         tp_metrics = self._compute_tp_metrics(entries.get(self.tp_metric_threshold, {}), num_labels, num_velocity_labels)
-        score = self._compute_score(threshold_metrics, tp_metrics, evaluated_classes, num_labels, num_predictions)
 
-        classes = {
-            name: {
-                "members": list(members),
-                "label_classes": {
-                    key: count for key, count in label_counts.items() if class_of[key.split(_CLASS_SEPARATOR)[0]] == name
-                },
-                "num_labels": num_labels.get(name, 0),
-                "num_predictions": num_predictions.get(name, 0),
-            }
-            for name, members in evaluated_classes.items()
-            if num_labels.get(name) or num_predictions.get(name)
-        }
         return {
-            "classes": classes,
-            "threshold_metrics": threshold_metrics,
-            "tp_metrics": tp_metrics,
-            "score": score,
+            "_value_": self._detection_score(ap["_value_"], {metric: tp_metrics[metric]["_value_"] for metric in _TP_METRICS}),
+            "num_labels": {
+                "_value_": sum(label_counts.values()),
+                **{name: {"_value_": num_labels.get(name, 0), **label_classes[name]} for name in counted_classes},
+            },
+            # a prediction of classes of several evaluated classes counts for each of them, but once in total
+            "num_predictions": {
+                "_value_": sum(prediction_counts.values()),
+                **{name: num_predictions.get(name, 0) for name in counted_classes},
+            },
+            "ap": ap,
+            **tp_metrics,
         }
 
     # ------------------------------------------------------------------
@@ -929,12 +935,12 @@ class ObjectDetection3D(Evaluation):
         recall = cum_tp / num_labels
         return self.compute_ap_func(recall, precision, self.min_recall, self.min_precision)
 
-    def _compute_threshold_metrics(
+    def _compute_ap(
         self,
         entries: Dict[float, Dict[str, List[Dict[str, Any]]]],
         num_labels: Dict[str, int],
     ) -> Dict[str, Any]:
-        """Compute per-threshold and overall AP.
+        """Compute the AP per threshold and class, and the mAP per threshold, per class and overall.
 
         AP is computed for every evaluated class with labels; a class without
         labels has no AP and does not enter the mAP, as its predictions can only
@@ -945,23 +951,20 @@ class ObjectDetection3D(Evaluation):
             num_labels: Evaluated classes with labels to their number of labels.
 
         Returns:
-            ``{"thresholds": {threshold: {"per_class_metrics", "map"}},
-            "overall_map"}``; the mAPs are ``None`` without any labels.
+            ``{"_value_": mAP, "classes": {class: mAP}, "dist_{threshold}":
+            {"_value_": mAP, "classes": {class: AP}}}`` with the mAP over all
+            thresholds and classes, the mAP of each class over all thresholds,
+            and the mAP and APs of each threshold; the mAPs over classes are
+            ``None`` without any labels.
         """
 
-        threshold_metrics: Dict[str, Any] = {"thresholds": {}}
-        maps = []
+        thresholds: Dict[str, Dict[str, Any]] = {}
         for threshold in self.matching_thresholds:
             by_class = entries.get(threshold, {})
-            per_class_metrics = {
-                name: {"ap": self._average_precision(by_class.get(name, []), count)} for name, count in num_labels.items()
-            }
-            map_val = float(np.mean([metrics["ap"] for metrics in per_class_metrics.values()])) if per_class_metrics else None
-            threshold_metrics["thresholds"][threshold] = {"per_class_metrics": per_class_metrics, "map": map_val}
-            if map_val is not None:
-                maps.append(map_val)
-        threshold_metrics["overall_map"] = float(np.mean(maps)) if maps else None
-        return threshold_metrics
+            aps = {name: self._average_precision(by_class.get(name, []), count) for name, count in num_labels.items()}
+            thresholds[f"dist_{threshold}"] = {"_value_": float(np.mean(list(aps.values()))) if aps else None, "classes": aps}
+        class_maps = {name: float(np.mean([metrics["classes"][name] for metrics in thresholds.values()])) for name in num_labels}
+        return {"_value_": float(np.mean(list(class_maps.values()))) if class_maps else None, "classes": class_maps, **thresholds}
 
     def _compute_tp_metrics(
         self,
@@ -969,14 +972,15 @@ class ObjectDetection3D(Evaluation):
         num_labels: Dict[str, int],
         num_velocity_labels: Dict[str, int],
     ) -> Dict[str, Dict[str, Optional[float]]]:
-        """Compute mean TP error metrics per class, at the TP metric threshold.
+        """Compute the TP error metrics per class and their means, at the TP metric threshold.
 
         Cumulative-mean errors (by descending confidence) are interpolated to
         101 recall points and averaged over ``[min_recall, max_recall]``. A
         class whose recall stays below ``min_recall`` falls back to worst-case
         ``1.0`` errors. ``ave`` only averages true positives whose label has a
         velocity: it is ``None`` for a class without any label with velocity,
-        and ``1.0`` if none of its true positives has one.
+        and ``1.0`` if none of its true positives has one. The mean of a metric
+        is the macro mean over the classes, skipping ``None`` values.
 
         Args:
             entries: Evaluated class to its entries at the TP metric threshold.
@@ -985,11 +989,12 @@ class ObjectDetection3D(Evaluation):
                 velocity.
 
         Returns:
-            ``class → {"ate", "ase", "aoe", "ave"}``; ``ave`` is a ``float`` or
-            ``None``.
+            ``{metric: {"_value_": mean, class: error}}`` for ``ate``, ``ase``,
+            ``aoe`` and ``ave``; the mean is ``None`` without any available
+            error, only ``ave`` can be ``None`` per class.
         """
 
-        tp_metrics: Dict[str, Dict[str, Optional[float]]] = {}
+        class_errors: Dict[str, Dict[str, Optional[float]]] = {}
         for name, count in num_labels.items():
             velocity_available = num_velocity_labels.get(name, 0) > 0
             worst: Dict[str, Optional[float]] = {"ate": 1.0, "ase": 1.0, "aoe": 1.0, "ave": 1.0 if velocity_available else None}
@@ -1012,91 +1017,48 @@ class ObjectDetection3D(Evaluation):
 
             average = ObjectDetectionUtils.compute_tp_101_point
             if not recall or average(np.array(recall), curves["ate"], self.min_recall) is None:
-                tp_metrics[name] = worst
+                class_errors[name] = worst
                 continue
-            tp_metrics[name] = {
+            class_errors[name] = {
                 metric: average(np.array(recall), curves[metric], self.min_recall) for metric in ("ate", "ase", "aoe")
             }
             if not velocity_available:
-                tp_metrics[name]["ave"] = None
+                class_errors[name]["ave"] = None
             elif counts["ave"] == 0:
-                tp_metrics[name]["ave"] = 1.0  # no true positive against a label with velocity
+                class_errors[name]["ave"] = 1.0  # no true positive against a label with velocity
             else:
-                tp_metrics[name]["ave"] = average(np.array(recall), curves["ave"], self.min_recall)
+                class_errors[name]["ave"] = average(np.array(recall), curves["ave"], self.min_recall)
+
+        tp_metrics: Dict[str, Dict[str, Optional[float]]] = {}
+        for metric in _TP_METRICS:
+            errors = {name: class_metrics[metric] for name, class_metrics in class_errors.items()}
+            available = [error for error in errors.values() if error is not None]
+            tp_metrics[metric] = {"_value_": float(np.mean(available)) if available else None, **errors}
         return tp_metrics
 
-    def _compute_score(
-        self,
-        threshold_metrics: Dict[str, Any],
-        tp_metrics: Dict[str, Dict[str, Optional[float]]],
-        evaluated_classes: Dict[str, Tuple[str, ...]],
-        num_labels: Dict[str, int],
-        num_predictions: Dict[str, int],
-    ) -> Dict[str, Any]:
-        """Flatten AP and TP metrics into the score dict.
+    def _detection_score(self, map_value: Optional[float], mean_errors: Dict[str, Optional[float]]) -> Optional[float]:
+        """Combine the mAP and the available mean TP errors into the detection score.
 
-        Emits per-threshold/per-class AP (``ap_{threshold}_{class}``), per-class
-        and overall mAP (``map_{class}``, ``map``), per-class and mean TP errors
-        (``{metric}_2.0_{class}``, ``m{metric}_2.0``), the
-        ``detection_score`` with the TP metrics it includes, and which classes
-        were evaluated::
+        ::
 
             detection_score = (5·mAP + Σ max(1 - m{metric}, 0)) / (5 + number of TP metrics)
 
-        This is the NDS formula of nuScenes over the available TP metrics: AVE
-        is left out when no label has a velocity. Mean TP errors skip ``None``
-        per-class values.
+        This is the NDS formula of nuScenes over the available TP metrics, i.e.
+        weighting mAP with :attr:`map_weight` and each TP metric with 1: AVE is
+        left out when no label has a velocity.
 
         Args:
-            threshold_metrics: Output of :meth:`_compute_threshold_metrics`.
-            tp_metrics: Output of :meth:`_compute_tp_metrics`.
-            evaluated_classes: Evaluated class to the classes it consists of.
-            num_labels: Evaluated classes with labels to their number of labels.
-            num_predictions: Evaluated class to its number of predictions.
+            map_value: mAP over all thresholds and evaluated classes, ``None``
+                without any labels.
+            mean_errors: TP metric to its mean error over the evaluated classes,
+                ``None`` if unavailable.
 
         Returns:
-            A flat dict of rounded (4 dp) score keys; ``map`` and
-            ``detection_score`` are ``None`` without any labels.
+            The detection score, ``None`` without any labels.
         """
 
-        score: Dict[str, Any] = {}
-        map_val = threshold_metrics["overall_map"]
-        score["map"] = None if map_val is None else round(map_val, 4)
-        # Declare which classes were evaluated, so that the mAP and the detection score can be read in context.
-        score["evaluated_classes"] = list(num_labels)
-        score["classes_without_predictions"] = [name for name in num_labels if not num_predictions.get(name)]
-        score["classes_without_ground_truth"] = [
-            name for name in evaluated_classes if num_predictions.get(name) and name not in num_labels
-        ]
-
-        # Per-threshold per-class AP and per-class mean AP.
-        per_class_aps: Dict[str, List[float]] = {}
-        for threshold, thr_data in threshold_metrics["thresholds"].items():
-            for name, class_metric in thr_data["per_class_metrics"].items():
-                score[f"ap_{threshold}_{name}"] = round(class_metric["ap"], 4)
-                per_class_aps.setdefault(name, []).append(class_metric["ap"])
-        for name, aps in per_class_aps.items():
-            score[f"map_{name}"] = round(float(np.mean(aps)), 4)
-
-        # Macro mean TP error metrics over the evaluated classes, skipping unavailable ones.
-        means: Dict[str, Optional[float]] = {}
-        for metric in _TP_METRICS:
-            values = [metrics[metric] for metrics in tp_metrics.values() if metrics[metric] is not None]
-            means[metric] = float(np.mean(values)) if values else None
-            score[f"m{metric}_{self.tp_metric_threshold}"] = None if means[metric] is None else round(means[metric], 4)
-
-        # Per-class TP error metrics at the TP metric threshold.
-        for name, class_metrics in tp_metrics.items():
-            for metric in _TP_METRICS:
-                value = class_metrics[metric]
-                score[f"{metric}_{self.tp_metric_threshold}_{name}"] = None if value is None else round(value, 4)
-
-        # The detection score weights mAP with map_weight and each available TP metric with 1.
-        available = [metric for metric in _TP_METRICS if means[metric] is not None]
-        if map_val is None:
-            score["detection_score"] = None
-        else:
-            tp_scores = sum(max(1.0 - means[metric], 0.0) for metric in available)
-            score["detection_score"] = round((self.map_weight * map_val + tp_scores) / (self.map_weight + len(available)), 4)
-        score["detection_score_tp_metrics"] = available
-        return score
+        if map_value is None:
+            return None
+        available = [error for error in mean_errors.values() if error is not None]
+        tp_scores = sum(max(1.0 - error, 0.0) for error in available)
+        return (self.map_weight * map_value + tp_scores) / (self.map_weight + len(available))

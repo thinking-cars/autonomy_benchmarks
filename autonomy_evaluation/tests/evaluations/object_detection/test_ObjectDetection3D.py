@@ -276,11 +276,11 @@ class TestObjectDetection3D:
 
     def test_prediction_of_another_class_is_a_false_positive(self):
         """A truck predicted on a car is no match: the car is missed, the truck a false positive."""
-        result = self._aggregate(([_pred(class_type=UTILITY)], [_gt(classes=(CAR,))]))
+        metrics = self._aggregate(([_pred(class_type=UTILITY)], [_gt(classes=(CAR,))]))
 
-        assert result["score"]["ap_2.0_car"] == 0.0
-        assert result["score"]["classes_without_predictions"] == ["car"]
-        assert result["score"]["classes_without_ground_truth"] == ["utility"]
+        assert metrics["ap"]["dist_2.0"]["classes"] == {"car": 0.0}
+        assert metrics["num_labels"] == {"_value_": 1, "car": {"_value_": 1, "car": 1}, "utility": {"_value_": 0}}
+        assert metrics["num_predictions"] == {"_value_": 1, "car": 0, "utility": 1}
 
     def test_prediction_of_a_possible_class_matches(self):
         """Any possible class of a label matches it, e.g. a truck on a Waymo vehicle."""
@@ -358,50 +358,49 @@ class TestObjectDetection3D:
 
     def test_single_class_labels_are_evaluated_per_class(self):
         """Datasets that label every object with one class, e.g. nuScenes, are evaluated per class."""
-        result = self._aggregate(
+        metrics = self._aggregate(
             ([_pred(class_type=CAR), _pred(x=5.0, class_type=UTILITY)], [_gt(classes=(CAR,)), _gt(x=5.0, classes=(UTILITY,))])
         )
 
-        assert result["score"]["evaluated_classes"] == ["car", "utility"]
-        assert result["score"]["map"] == 1.0
+        assert list(metrics["ap"]["dist_2.0"]["classes"]) == ["car", "utility"]
+        assert metrics["ap"]["_value_"] == 1.0
 
     def test_classes_a_dataset_does_not_distinguish_are_evaluated_together(self):
         """Waymo's vehicles, pedestrians and cyclists become the evaluated classes."""
-        result = self._aggregate(
+        metrics = self._aggregate(
             (
                 [_pred(x=0.0, class_type=UTILITY), _pred(x=5.0, class_type=PEDESTRIAN), _pred(x=10.0, class_type=BICYCLE)],
                 [_gt(x=0.0, classes=WAYMO_VEHICLE), _gt(x=5.0, classes=WAYMO_PEDESTRIAN), _gt(x=10.0, classes=(BICYCLE,))],
             )
         )
 
-        assert result["score"]["evaluated_classes"] == ["pedestrian|vru", "bicycle", WAYMO_VEHICLE_CLASS]
-        assert result["score"][f"ap_2.0_{WAYMO_VEHICLE_CLASS}"] == 1.0
-        assert result["classes"][WAYMO_VEHICLE_CLASS]["members"] == ["motorcycle", "car", "utility", "bus", "micro"]
+        assert list(metrics["ap"]["dist_2.0"]["classes"]) == ["pedestrian|vru", "bicycle", WAYMO_VEHICLE_CLASS]
+        assert metrics["ap"]["dist_2.0"]["classes"][WAYMO_VEHICLE_CLASS] == 1.0
 
     def test_overlapping_label_classes_are_evaluated_together(self):
         """Persons of NVIDIA may be pedestrians or VRUs, so its strollers are evaluated with them."""
         person, stroller = _gt(x=0.0, classes=WAYMO_PEDESTRIAN), _gt(x=5.0, classes=(VRU,))
 
-        result = self._aggregate(([_pred(x=0.0, class_type=VRU), _pred(x=5.0, class_type=PEDESTRIAN)], [person, stroller]))
+        metrics = self._aggregate(([_pred(x=0.0, class_type=VRU), _pred(x=5.0, class_type=PEDESTRIAN)], [person, stroller]))
 
-        assert result["score"]["evaluated_classes"] == ["pedestrian|vru"]
-        assert result["classes"]["pedestrian|vru"]["label_classes"] == {"pedestrian|vru": 1, "vru": 1}
+        # the labels of the evaluated class by their possible classes
+        assert metrics["num_labels"] == {"_value_": 2, "pedestrian|vru": {"_value_": 2, "pedestrian|vru": 1, "vru": 1}}
         # the stroller is definitely a VRU, so the pedestrian predicted on it is a false positive
-        assert result["tp_metrics"]["pedestrian|vru"]["ate"] == 0.0
-        assert result["score"]["ap_2.0_pedestrian|vru"] < 1.0
+        assert metrics["ate"]["pedestrian|vru"] == 0.0
+        assert metrics["ap"]["dist_2.0"]["classes"]["pedestrian|vru"] < 1.0
 
     def test_labels_that_may_be_unknown_join_no_classes(self):
         """A label that may be none of the classes is don't-care, so it does not join the classes it lists."""
-        result = self._aggregate(
+        metrics = self._aggregate(
             (
                 [_pred(x=0.0, class_type=CAR), _pred(x=5.0, class_type=UTILITY)],
                 [_gt(x=0.0, classes=(CAR,)), _gt(x=5.0, classes=(UTILITY,)), _gt(x=10.0, classes=(UNKNOWN, CAR, UTILITY))],
             )
         )
 
-        assert result["score"]["evaluated_classes"] == ["car", "utility"]
+        assert list(metrics["ap"]["dist_2.0"]["classes"]) == ["car", "utility"]
 
-    def test_scene_results_use_the_classes_of_all_samples(self):
+    def test_scene_metrics_use_the_classes_of_all_samples(self):
         """A scene without a label joining classes is still evaluated on the classes of the whole evaluation."""
         self._aggregate(
             ([_pred(class_type=PEDESTRIAN)], [_gt(classes=WAYMO_PEDESTRIAN)]),
@@ -411,8 +410,8 @@ class TestObjectDetection3D:
 
         results = self.bm.finalize()
 
-        assert results["scene_results"]["strollers"]["aggregated_metrics"]["score"]["evaluated_classes"] == ["pedestrian|vru"]
-        assert results["aggregated_metrics"]["score"]["evaluated_classes"] == ["pedestrian|vru"]
+        assert list(results["scenes"]["strollers"]["metrics"]["ap"]["dist_2.0"]["classes"]) == ["pedestrian|vru"]
+        assert list(results["metrics"]["ap"]["dist_2.0"]["classes"]) == ["pedestrian|vru"]
 
     # --- aggregation ---
 
@@ -431,44 +430,44 @@ class TestObjectDetection3D:
             _pred(x=15.0, classes=(CAR,), vel_lon=8.0),
         ]
 
-        score = self._aggregate((preds, gts))["score"]
+        metrics = self._aggregate((preds, gts))
 
-        assert score["map"] == 1.0
-        assert [score[f"m{metric}_2.0"] for metric in ("ate", "ase", "aoe", "ave")] == [0.0, 0.0, 0.0, 0.0]
-        assert score["detection_score"] == 1.0
+        assert metrics["ap"]["_value_"] == 1.0
+        assert [metrics[metric]["_value_"] for metric in ("ate", "ase", "aoe", "ave")] == [0.0, 0.0, 0.0, 0.0]
+        assert metrics["_value_"] == 1.0
 
     def test_perfect_matching_yields_high_map(self):
         """Verify perfect matching produces high mean average precision."""
         n = 10
         preds = [_pred(x=float(i), confidence=1.0 - i * 0.01) for i in range(n)]
         gts = [_gt(x=float(i)) for i in range(n)]
-        assert self._aggregate((preds, gts))["score"]["map"] >= 0.8
+        assert self._aggregate((preds, gts))["ap"]["_value_"] >= 0.8
 
     def test_no_pred_yields_zero_map(self):
         """Verify missing predictions yield zero mAP."""
-        assert self._aggregate(([], [_gt(x=0.0)]))["score"]["map"] == 0.0
+        assert self._aggregate(([], [_gt(x=0.0)]))["ap"]["_value_"] == 0.0
 
     def test_predictions_without_labels_yield_no_map(self):
         """Without any label, no class is evaluated, so there is no mAP."""
-        score = self._aggregate(([_pred(x=float(i)) for i in range(5)], []))["score"]
+        metrics = self._aggregate(([_pred(x=float(i)) for i in range(5)], []))
 
-        assert score["map"] is None
-        assert score["detection_score"] is None
-        assert score["classes_without_ground_truth"] == ["car"]
+        assert metrics["ap"]["_value_"] is None
+        assert metrics["_value_"] is None
+        assert metrics["num_labels"] == {"_value_": 0, "car": {"_value_": 0}}
 
     def test_class_without_labels_does_not_enter_map(self):
         """A false positive bus in a sample without buses has no AP to dilute the mAP with."""
         n = 10
         preds = [_pred(x=float(i), confidence=1.0 - i * 0.01) for i in range(n)]
         gts = [_gt(x=float(i)) for i in range(n)]
-        perfect = self._aggregate((preds, gts))["score"]["map"]
+        perfect = self._aggregate((preds, gts))["ap"]["_value_"]
         self.bm.reset()
 
-        score = self._aggregate((preds + [_pred(x=5.0, y=20.0, class_type=BUS)], gts))["score"]
+        metrics = self._aggregate((preds + [_pred(x=5.0, y=20.0, class_type=BUS)], gts))
 
-        assert score["map"] == perfect
-        assert "ap_2.0_bus" not in score
-        assert score["classes_without_ground_truth"] == ["bus"]
+        assert metrics["ap"]["_value_"] == perfect
+        assert "bus" not in metrics["ap"]["dist_2.0"]["classes"]
+        assert metrics["num_labels"]["bus"] == {"_value_": 0}
 
     def test_class_without_predictions_counts_as_zero(self):
         """A class with labels that the model never predicts is a real failure and stays in the mAP."""
@@ -476,18 +475,54 @@ class TestObjectDetection3D:
         preds = [_pred(x=float(i), confidence=1.0 - i * 0.01) for i in range(n)]
         gts = [_gt(x=float(i)) for i in range(n)] + [_gt(x=5.0, y=20.0, classes=(PEDESTRIAN,))]
 
-        score = self._aggregate((preds, gts))["score"]
+        metrics = self._aggregate((preds, gts))
 
-        assert score["map"] < 0.6
-        assert score["evaluated_classes"] == ["pedestrian", "car"]
-        assert score["classes_without_predictions"] == ["pedestrian"]
-        assert score["ate_2.0_pedestrian"] == 1.0
+        assert metrics["ap"]["_value_"] < 0.6
+        assert list(metrics["ap"]["dist_2.0"]["classes"]) == ["pedestrian", "car"]
+        assert metrics["num_predictions"]["pedestrian"] == 0
+        assert metrics["ate"]["pedestrian"] == 1.0
+
+    def test_class_map_averages_the_ap_of_the_class_over_the_thresholds(self):
+        """A car predicted 1.5 m off only matches at the 2 m and 4 m thresholds, a pedestrian on its label at all."""
+        metrics = self._aggregate(
+            ([_pred(x=1.5), _pred(x=10.0, class_type=PEDESTRIAN)], [_gt(x=0.0), _gt(x=10.0, classes=(PEDESTRIAN,))])
+        )
+
+        assert [metrics["ap"][f"dist_{threshold}"]["classes"]["car"] for threshold in (0.5, 1.0, 2.0, 4.0)] == [
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+        ]
+        assert metrics["ap"]["classes"] == {"pedestrian": 1.0, "car": 0.5}
+        assert metrics["ap"]["_value_"] == 0.75
 
     def test_multi_frame_accumulation(self):
         """Verify label counts accumulate correctly across multiple frames."""
-        result = self._aggregate(([_pred(x=0.0, confidence=0.9)], [_gt(x=0.0)]), ([_pred(x=0.0, confidence=0.8)], [_gt(x=0.0)]))
-        assert result["classes"]["car"]["num_labels"] == 2
-        assert result["classes"]["car"]["num_predictions"] == 2
+        metrics = self._aggregate(([_pred(x=0.0, confidence=0.9)], [_gt(x=0.0)]), ([_pred(x=0.0, confidence=0.8)], [_gt(x=0.0)]))
+        assert metrics["num_labels"] == {"_value_": 2, "car": {"_value_": 2, "car": 2}}
+        assert metrics["num_predictions"] == {"_value_": 2, "car": 2}
+
+    def test_prediction_of_several_evaluated_classes_counts_once_in_total(self):
+        """A prediction hedging over a car and a pedestrian counts for both classes, but as one prediction."""
+        metrics = self._aggregate(([_pred(classes=(CAR, PEDESTRIAN))], [_gt(classes=(CAR,)), _gt(x=5.0, classes=(PEDESTRIAN,))]))
+
+        assert metrics["num_predictions"] == {"_value_": 1, "pedestrian": 1, "car": 1}
+        assert metrics["num_labels"] == {
+            "_value_": 2,
+            "pedestrian": {"_value_": 1, "pedestrian": 1},
+            "car": {"_value_": 1, "car": 1},
+        }
+
+    def test_metrics_hold_their_aggregated_value_next_to_their_sub_metrics(self):
+        """Each metric reports its aggregate under '_value_', followed by its thresholds or classes."""
+        metrics = self._aggregate(([_pred(x=0.0)], [_gt(x=0.0)]))
+
+        assert list(metrics) == ["_value_", "num_labels", "num_predictions", "ap", "ate", "ase", "aoe", "ave"]
+        assert list(metrics["ap"]) == ["_value_", "classes", "dist_0.5", "dist_1.0", "dist_2.0", "dist_4.0"]
+        assert metrics["num_labels"] == {"_value_": 1, "car": {"_value_": 1, "car": 1}}
+        assert metrics["ap"]["dist_0.5"] == {"_value_": 1.0, "classes": {"car": 1.0}}
+        assert metrics["ate"] == {"_value_": 0.0, "car": 0.0}
 
     def test_reproduces_the_former_nuscenes_evaluation(self):
         """With labels of single classes, AP and TP errors equal those of the former NuscenesLidarObjectDetection.
@@ -503,18 +538,13 @@ class TestObjectDetection3D:
             label, _ = _label(gts)
             self.bm.record_sample(prediction=_msg(preds), label=label)
 
-        result = self.bm.compute_aggregated_metrics(self.bm._sample_results)
+        metrics = self.bm.compute_aggregated_metrics(self.bm._sample_results)
 
         for threshold, aps in _GOLDEN_AP.items():
-            for name, ap in aps.items():
-                assert result["threshold_metrics"]["thresholds"][threshold]["per_class_metrics"][name]["ap"] == pytest.approx(
-                    ap, abs=1e-12
-                )
+            assert metrics["ap"][f"dist_{threshold}"]["classes"] == pytest.approx(aps, abs=1e-12)
         for name, errors in _GOLDEN_TP_ERRORS.items():
-            assert [result["tp_metrics"][name][metric] for metric in ("ate", "ase", "aoe", "ave")] == pytest.approx(
-                errors, abs=1e-12
-            )
-        assert result["threshold_metrics"]["overall_map"] == pytest.approx(_GOLDEN_MAP, abs=1e-12)
+            assert [metrics[metric][name] for metric in ("ate", "ase", "aoe", "ave")] == pytest.approx(errors, abs=1e-12)
+        assert metrics["ap"]["_value_"] == pytest.approx(_GOLDEN_MAP, abs=1e-12)
 
     # --- filters ---
 
@@ -572,56 +602,42 @@ class TestObjectDetection3D:
 
     def test_velocity_error_needs_labels_with_velocity(self):
         """Without labels whose velocity is set, AVE is unavailable and left out of the detection score."""
-        score = self._aggregate(([_pred(x=0.0, vel_lon=5.0)], [_gt(x=0.0, velocity_set=False)]))["score"]
+        metrics = self._aggregate(([_pred(x=0.0, vel_lon=5.0)], [_gt(x=0.0, velocity_set=False)]))
 
-        assert score["ave_2.0_car"] is None
-        assert score["mave_2.0"] is None
-        assert score["detection_score_tp_metrics"] == ["ate", "ase", "aoe"]
-        assert score["detection_score"] == 1.0
+        assert metrics["ave"] == {"_value_": None, "car": None}
+        # a perfect detection without AVE, which would otherwise count as error 1
+        assert metrics["_value_"] == 1.0
 
     def test_velocity_error_against_labels_with_velocity(self):
         """The velocity error compares the predicted with the labeled velocity."""
-        score = self._aggregate(([_pred(x=0.0, vel_lon=5.0)], [_gt(x=0.0, vel_lon=3.0)]))["score"]
+        metrics = self._aggregate(([_pred(x=0.0, vel_lon=5.0)], [_gt(x=0.0, vel_lon=3.0)]))
 
-        assert score["ave_2.0_car"] == 2.0
-        assert score["detection_score_tp_metrics"] == ["ate", "ase", "aoe", "ave"]
+        assert metrics["ave"] == {"_value_": 2.0, "car": 2.0}
+        # AVE enters the detection score with the error clamped to 1
+        assert metrics["_value_"] == pytest.approx((5.0 * 1.0 + 3.0) / 9.0)
 
     def test_velocity_error_skips_labels_without_velocity(self):
         """True positives against labels without velocity do not enter the velocity error."""
         preds = [_pred(x=0.0, vel_lon=5.0, confidence=0.9), _pred(x=10.0, vel_lon=9.0, confidence=0.8)]
         gts = [_gt(x=0.0, vel_lon=3.0), _gt(x=10.0, velocity_set=False)]
 
-        assert self._aggregate((preds, gts))["score"]["ave_2.0_car"] == 2.0
-
-    @staticmethod
-    def _tm(overall_map: float) -> dict:
-        """Create minimal threshold_metrics structure for detection score testing."""
-        return {"overall_map": overall_map, "thresholds": {}}
-
-    def _score(self, overall_map: float, tp_metrics: dict) -> dict:
-        """Compute the score of the given mAP and TP metrics of evaluated classes with labels."""
-        num_labels = {name: 1 for name in tp_metrics}
-        return self.bm._compute_score(
-            self._tm(overall_map), tp_metrics, {name: (name,) for name in tp_metrics}, num_labels, num_labels
-        )
+        assert self._aggregate((preds, gts))["ave"]["car"] == 2.0
 
     def test_detection_score_with_all_tp_metrics(self):
         """With all TP metrics available, the detection score weights them like the NDS of nuScenes without AAE."""
-        score = self._score(0.5, {"car": {"ate": 0.2, "ase": 0.1, "aoe": 0.3, "ave": 0.4}})
+        score = self.bm._detection_score(0.5, {"ate": 0.2, "ase": 0.1, "aoe": 0.3, "ave": 0.4})
 
-        assert score["detection_score"] == pytest.approx((5.0 * 0.5 + 0.8 + 0.9 + 0.7 + 0.6) / 9.0, abs=1e-4)
+        assert score == pytest.approx((5.0 * 0.5 + 0.8 + 0.9 + 0.7 + 0.6) / 9.0)
 
     def test_detection_score_without_velocity(self):
         """Without AVE, the detection score is normalized over the remaining TP metrics."""
-        score = self._score(0.5, {"car": {"ate": 0.2, "ase": 0.1, "aoe": 0.3, "ave": None}})
+        score = self.bm._detection_score(0.5, {"ate": 0.2, "ase": 0.1, "aoe": 0.3, "ave": None})
 
-        assert score["detection_score"] == pytest.approx((5.0 * 0.5 + 0.8 + 0.9 + 0.7) / 8.0, abs=1e-4)
-        assert score["detection_score_tp_metrics"] == ["ate", "ase", "aoe"]
+        assert score == pytest.approx((5.0 * 0.5 + 0.8 + 0.9 + 0.7) / 8.0)
 
     def test_detection_score_clamps_tp_errors(self):
         """Verify TP errors above 1.0 are clamped in the detection score."""
-        score = self._score(0.0, {"car": {"ate": 2.0, "ase": 3.0, "aoe": 5.0, "ave": 1.5}})
-        assert score["detection_score"] == 0.0
+        assert self.bm._detection_score(0.0, {"ate": 2.0, "ase": 3.0, "aoe": 5.0, "ave": 1.5}) == 0.0
 
     # --- topics ---
 

@@ -278,7 +278,7 @@ class _FakeEvaluationHandler:
     def finalize(self, complete: bool = True) -> dict:
         """Report results that are marked the way the node asked for."""
         self.finalized_complete = complete
-        return {"num_samples": 2, "num_scenes": 1, "complete": complete, "aggregated_metrics": {}}
+        return {"num_samples": 2, "num_scenes": 1, "complete": complete, "metrics": {}}
 
     def save_results(self, output_path: str, results: dict = None) -> str:
         """Keep the results instead of writing them to a file."""
