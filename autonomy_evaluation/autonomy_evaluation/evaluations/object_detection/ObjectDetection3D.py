@@ -257,6 +257,11 @@ class ObjectDetection3D(Evaluation):
     dataset do not distinguish are evaluated together.
     """
 
+    VERSION = "1.0.0"
+    RELEASE_NOTES = {
+        "1.0.0": "Initial implementation based on adapted nuScenes detection benchmark",
+    }
+
     def __init__(self) -> None:
         """Configure the thresholds, class ranges and filters, following nuScenes."""
         super().__init__(

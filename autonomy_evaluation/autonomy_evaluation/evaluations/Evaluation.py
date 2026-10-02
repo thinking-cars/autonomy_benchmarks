@@ -37,12 +37,23 @@ class Evaluation(ABC):
     (see :meth:`all_inputs`), so an implementation names its parameters like
     its topics.  The message of optional ground truth that is not published is
     passed as ``None``.
+
+    Subclasses declare the version of their evaluation via the class attributes
+    :attr:`VERSION` and :attr:`RELEASE_NOTES`.
     """
+
+    #: Version of the evaluation implementation.
+    VERSION: str = "0.0.0"
+
+    #: Mapping of version strings to their release notes.
+    RELEASE_NOTES: Dict[str, str] = {}
 
     def __init__(self, name: str, description: str = "") -> None:
         """Initialize an evaluation definition and empty result store."""
         self.name: str = name
         self.description: str = description
+        self.version = self.VERSION
+        self.release_notes = self.RELEASE_NOTES
         self._sample_results: List[Dict[str, Any]] = []
 
     # ------------------------------------------------------------------
@@ -281,6 +292,7 @@ class Evaluation(ABC):
         scenes = self.sample_results_by_scene()
         return {
             "evaluation": self.name,
+            "version": self.version,
             "description": self.description,
             "complete": complete,
             "num_samples": len(self._sample_results),
